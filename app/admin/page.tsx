@@ -3,7 +3,8 @@ import { createServiceClient } from '@/lib/supabase/server'
 import AdminIncidentRow from './AdminIncidentRow'
 import AdminTaskRow from './AdminTaskRow'
 import AdminSendInvites from './AdminSendInvites'
-import type { Task, Incident, Message, TaskStatus } from '@/lib/types'
+import AdminMessageSender from './AdminMessageSender'
+import type { Task, Incident, Message, TaskStatus, Profile } from '@/lib/types'
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
   ej_startad: 'Ej startad',
@@ -20,7 +21,7 @@ const STATUS_STYLES: Record<TaskStatus, string> = {
 export default async function AdminPage() {
   const supabase = await createServiceClient()
 
-  const [tasksRes, incidentsRes, messagesRes, pendingRes] = await Promise.all([
+  const [tasksRes, incidentsRes, messagesRes, pendingRes, profilesRes] = await Promise.all([
     supabase
       .from('tasks')
       .select('*')
@@ -38,12 +39,17 @@ export default async function AdminPage() {
     supabase
       .from('pending_assignments')
       .select('email'),
+    supabase
+      .from('profiles')
+      .select('id, name, email, role, phone')
+      .order('name'),
   ])
 
   const tasks = (tasksRes.data as Task[]) ?? []
   const incidents = (incidentsRes.data ?? []) as (Incident & { profiles: { name: string; phone: string | null } | null })[]
   const messages = (messagesRes.data ?? []) as (Message & { from_profile: { name: string } | null, to_profile: { name: string } | null })[]
   const recipientCount = new Set((pendingRes.data ?? []).map((r: { email: string }) => r.email.toLowerCase())).size
+  const profiles = (profilesRes.data as Profile[]) ?? []
 
   const totalTasks = tasks.length
   const klara = tasks.filter((t) => t.status === 'klar').length
@@ -158,6 +164,14 @@ export default async function AdminPage() {
               </div>
             </div>
           )}
+        </section>
+
+        {/* Skicka meddelande */}
+        <section>
+          <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+            Skicka meddelande
+          </h2>
+          <AdminMessageSender profiles={profiles} />
         </section>
 
         {/* Skicka magic links */}
