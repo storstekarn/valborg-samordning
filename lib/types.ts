@@ -41,6 +41,7 @@ export interface Incident {
   category: IncidentCategory
   message: string
   status: IncidentStatus
+  admin_comment: string | null
   created_at: string
   profiles?: Profile
 }

@@ -15,16 +15,29 @@ export async function PATCH(
   }
 
   const { id } = await params
-  const { status } = await request.json() as { status: IncidentStatus }
+  const body = await request.json() as { status?: IncidentStatus; admin_comment?: string }
 
-  if (!VALID_STATUSES.includes(status)) {
-    return NextResponse.json({ error: 'Ogiltig status' }, { status: 400 })
+  const update: Record<string, unknown> = {}
+
+  if (body.status !== undefined) {
+    if (!VALID_STATUSES.includes(body.status)) {
+      return NextResponse.json({ error: 'Ogiltig status' }, { status: 400 })
+    }
+    update.status = body.status
+  }
+
+  if (body.admin_comment !== undefined) {
+    update.admin_comment = body.admin_comment
+  }
+
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ error: 'Inget att uppdatera' }, { status: 400 })
   }
 
   const supabase = await createServiceClient()
   const { error } = await supabase
     .from('incidents')
-    .update({ status })
+    .update(update)
     .eq('id', id)
 
   if (error) {

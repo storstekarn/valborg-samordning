@@ -65,8 +65,9 @@ create table incidents (
   reported_by uuid references profiles(id),
   category    text not null check (category in ('brand', 'el', 'logistik', 'övrigt')),
   message     text not null,
-  status      text default 'ny' check (status in ('ny', 'hanteras', 'löst')),
-  created_at  timestamptz default now()
+  status        text default 'ny' check (status in ('ny', 'hanteras', 'löst')),
+  admin_comment text,
+  created_at    timestamptz default now()
 );
 
 create table messages (

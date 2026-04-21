@@ -28,7 +28,7 @@ export default async function AdminPage() {
       .order('start_time', { nullsFirst: true }),
     supabase
       .from('incidents')
-      .select('*, profiles(name)')
+      .select('*, profiles(name, phone)')
       .order('created_at', { ascending: false }),
     supabase
       .from('messages')
@@ -41,7 +41,7 @@ export default async function AdminPage() {
   ])
 
   const tasks = (tasksRes.data as Task[]) ?? []
-  const incidents = (incidentsRes.data ?? []) as (Incident & { profiles: { name: string } | null })[]
+  const incidents = (incidentsRes.data ?? []) as (Incident & { profiles: { name: string; phone: string | null } | null })[]
   const messages = (messagesRes.data ?? []) as (Message & { from_profile: { name: string } | null, to_profile: { name: string } | null })[]
   const recipientCount = new Set((pendingRes.data ?? []).map((r: { email: string }) => r.email.toLowerCase())).size
 
@@ -108,7 +108,7 @@ export default async function AdminPage() {
           ) : (
             <div className="space-y-2">
               {incidents.map((incident) => (
-                <AdminIncidentRow key={incident.id} incident={incident} reporterName={incident.profiles?.name ?? null} />
+                <AdminIncidentRow key={incident.id} incident={incident} reporterName={incident.profiles?.name ?? null} reporterPhone={incident.profiles?.phone ?? null} />
               ))}
             </div>
           )}
