@@ -8,6 +8,7 @@ import type { Profile, Message } from '@/lib/types'
 interface Props {
   currentUserId: string
   allProfiles: Profile[]
+  sameAreaProfiles: Profile[]
   initialMessages: Message[]
   superadminEmail: string
 }
@@ -20,16 +21,22 @@ function formatTime(iso: string) {
   return d.toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' })
 }
 
-export default function MessagesClient({ currentUserId, allProfiles, initialMessages, superadminEmail }: Props) {
+function displayName(p: Profile): string {
+  return p.name ?? 'Okänd'
+}
+
+export default function MessagesClient({ currentUserId, allProfiles, sameAreaProfiles, initialMessages, superadminEmail }: Props) {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [mobileView, setMobileView] = useState<'list' | 'conversation'>('list')
+  const [showNewMsg, setShowNewMsg] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const newMsgRef = useRef<HTMLSelectElement>(null)
 
-  // Priority profiles (admin / Max) at top
+  // Priority profiles: superadmin + Max
   const MAX_EMAIL = 'max.angervall@gmail.com'
   const priorityIds = new Set(
     allProfiles
@@ -37,7 +44,7 @@ export default function MessagesClient({ currentUserId, allProfiles, initialMess
       .map(p => p.id)
   )
 
-  // Derive per-partner stats from messages
+  // Per-partner stats
   const lastByPartner: Record<string, Message> = {}
   const unreadByPartner: Record<string, number> = {}
 
@@ -53,7 +60,7 @@ export default function MessagesClient({ currentUserId, allProfiles, initialMess
 
   const partnersWithMessages = new Set(Object.keys(lastByPartner))
 
-  // Sorted profile list: priority → conversations (by recency) → rest (alphabetically)
+  // Sorted conversation list: priority → conversations by recency → rest alphabetically
   const profilesSorted = [
     ...allProfiles.filter(p => p.id !== currentUserId && priorityIds.has(p.id)),
     ...allProfiles
@@ -64,7 +71,10 @@ export default function MessagesClient({ currentUserId, allProfiles, initialMess
       .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '')),
   ]
 
-  // Active conversation messages
+  // Dropdown groups for "Nytt meddelande"
+  const priorityProfiles = allProfiles.filter(p => p.id !== currentUserId && priorityIds.has(p.id))
+  const areaOnlyProfiles = sameAreaProfiles.filter(p => !priorityIds.has(p.id))
+
   const conversation = messages.filter(m =>
     (m.from_id === currentUserId && m.to_id === selectedUserId) ||
     (m.from_id === selectedUserId && m.to_id === currentUserId)
@@ -86,8 +96,14 @@ export default function MessagesClient({ currentUserId, allProfiles, initialMess
   function openConversation(userId: string) {
     setSelectedUserId(userId)
     setMobileView('conversation')
+    setShowNewMsg(false)
     markRead(userId)
     setTimeout(() => inputRef.current?.focus(), 80)
+  }
+
+  function toggleNewMsg() {
+    setShowNewMsg(prev => !prev)
+    if (!showNewMsg) setTimeout(() => newMsgRef.current?.focus(), 80)
   }
 
   function backToList() {
@@ -95,7 +111,7 @@ export default function MessagesClient({ currentUserId, allProfiles, initialMess
     setSelectedUserId(null)
   }
 
-  // Realtime subscription
+  // Realtime
   useEffect(() => {
     const supabase = createClient()
     const channel = supabase
@@ -107,7 +123,6 @@ export default function MessagesClient({ currentUserId, allProfiles, initialMess
           if (prev.some(x => x.id === m.id)) return prev
           return [...prev, m]
         })
-        // Auto-mark as read if conversation with sender is open
         if (m.to_id === currentUserId && m.from_id === selectedUserId) {
           const supabase = createClient()
           supabase.from('messages').update({ read: true }).eq('id', m.id)
@@ -118,7 +133,6 @@ export default function MessagesClient({ currentUserId, allProfiles, initialMess
     return () => { supabase.removeChannel(channel) }
   }, [currentUserId, selectedUserId])
 
-  // Scroll to bottom
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [conversation.length, selectedUserId])
@@ -144,7 +158,6 @@ export default function MessagesClient({ currentUserId, allProfiles, initialMess
       {/* Header */}
       <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur shrink-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          {/* Mobile: show back-to-list button when in conversation */}
           <div className="flex items-center gap-3">
             {mobileView === 'conversation' && (
               <button
@@ -156,7 +169,7 @@ export default function MessagesClient({ currentUserId, allProfiles, initialMess
             )}
             <h1 className="text-base font-bold text-zinc-100">
               {mobileView === 'conversation' && selectedProfile
-                ? selectedProfile.name ?? selectedProfile.email
+                ? displayName(selectedProfile)
                 : 'Meddelanden'}
               {totalUnread > 0 && mobileView === 'list' && (
                 <span className="ml-2 text-xs bg-red-500 text-white rounded-full px-1.5 py-0.5 font-bold">
@@ -177,16 +190,69 @@ export default function MessagesClient({ currentUserId, allProfiles, initialMess
       {/* Body */}
       <div className="flex-1 flex overflow-hidden max-w-4xl w-full mx-auto">
 
-        {/* Conversation list — hidden on mobile when in conversation view */}
+        {/* Conversation list */}
         <div className={`
-          flex-col w-full md:w-72 lg:w-80 shrink-0
-          border-r border-zinc-800 overflow-y-auto
+          flex-col w-full md:w-72 lg:w-80 shrink-0 border-r border-zinc-800
           ${mobileView === 'conversation' ? 'hidden md:flex' : 'flex'}
         `}>
-          {profilesSorted.length === 0 ? (
-            <p className="text-xs text-zinc-600 p-4">Inga kontakter.</p>
-          ) : (
-            profilesSorted.map(profile => {
+          {/* List header with "Nytt meddelande" button */}
+          <div className="shrink-0 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+              Konversationer
+            </span>
+            <button
+              onClick={toggleNewMsg}
+              className={`text-[11px] font-medium px-2.5 py-1 rounded-md transition-colors
+                ${showNewMsg
+                  ? 'bg-zinc-700 text-zinc-300'
+                  : 'bg-amber-600 hover:bg-amber-500 text-white'}`}
+            >
+              {showNewMsg ? '✕ Stäng' : '+ Nytt'}
+            </button>
+          </div>
+
+          {/* New message dropdown */}
+          {showNewMsg && (
+            <div className="shrink-0 px-3 py-3 border-b border-zinc-700 bg-zinc-800/40">
+              <p className="text-[10px] text-zinc-500 mb-1.5 font-medium uppercase tracking-wide">
+                Välj mottagare
+              </p>
+              <select
+                ref={newMsgRef}
+                defaultValue=""
+                onChange={e => { if (e.target.value) openConversation(e.target.value) }}
+                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="" disabled>— välj person —</option>
+
+                {priorityProfiles.length > 0 && (
+                  <optgroup label="Driftansvarig">
+                    {priorityProfiles.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {displayName(p)}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+
+                {areaOnlyProfiles.length > 0 && (
+                  <optgroup label="Mitt ansvarsområde">
+                    {[...areaOnlyProfiles]
+                      .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
+                      .map(p => (
+                        <option key={p.id} value={p.id}>
+                          {displayName(p)}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+          )}
+
+          {/* Scrollable list */}
+          <div className="flex-1 overflow-y-auto">
+            {profilesSorted.map(profile => {
               const last = lastByPartner[profile.id]
               const unread = unreadByPartner[profile.id] ?? 0
               const isSelected = profile.id === selectedUserId
@@ -199,16 +265,15 @@ export default function MessagesClient({ currentUserId, allProfiles, initialMess
                   className={`w-full text-left px-4 py-3 border-b border-zinc-800/60 transition-colors flex items-start gap-3
                     ${isSelected ? 'bg-zinc-800' : 'hover:bg-zinc-900'}`}
                 >
-                  {/* Avatar */}
                   <div className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold
                     ${isPriority ? 'bg-amber-500/30 text-amber-300' : 'bg-zinc-700 text-zinc-300'}`}>
-                    {(profile.name ?? profile.email).charAt(0).toUpperCase()}
+                    {displayName(profile).charAt(0).toUpperCase()}
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1">
                       <span className={`text-sm font-medium truncate ${unread > 0 ? 'text-zinc-100' : 'text-zinc-300'}`}>
-                        {profile.name ?? profile.email}
+                        {displayName(profile)}
                         {isPriority && (
                           <span className="ml-1.5 text-xs text-amber-400 font-normal">Admin</span>
                         )}
@@ -217,12 +282,11 @@ export default function MessagesClient({ currentUserId, allProfiles, initialMess
                         <span className="shrink-0 text-xs text-zinc-600">{formatTime(last.created_at)}</span>
                       )}
                     </div>
-                    {last && (
+                    {last ? (
                       <p className={`text-xs truncate mt-0.5 ${unread > 0 ? 'text-zinc-300 font-medium' : 'text-zinc-600'}`}>
                         {last.from_id === currentUserId ? 'Du: ' : ''}{last.message}
                       </p>
-                    )}
-                    {!last && (
+                    ) : (
                       <p className="text-xs text-zinc-700 mt-0.5">Starta konversation</p>
                     )}
                   </div>
@@ -234,11 +298,11 @@ export default function MessagesClient({ currentUserId, allProfiles, initialMess
                   )}
                 </button>
               )
-            })
-          )}
+            })}
+          </div>
         </div>
 
-        {/* Active conversation — hidden on mobile when in list view */}
+        {/* Active conversation */}
         <div className={`
           flex-1 flex-col overflow-hidden
           ${mobileView === 'list' ? 'hidden md:flex' : 'flex'}
@@ -249,10 +313,10 @@ export default function MessagesClient({ currentUserId, allProfiles, initialMess
               <div className="hidden md:flex items-center gap-3 px-4 py-3 border-b border-zinc-800 shrink-0">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
                   ${priorityIds.has(selectedUserId) ? 'bg-amber-500/30 text-amber-300' : 'bg-zinc-700 text-zinc-300'}`}>
-                  {(selectedProfile?.name ?? selectedProfile?.email ?? '?').charAt(0).toUpperCase()}
+                  {displayName(selectedProfile!).charAt(0).toUpperCase()}
                 </div>
                 <span className="font-medium text-zinc-100 text-sm">
-                  {selectedProfile?.name ?? selectedProfile?.email}
+                  {displayName(selectedProfile!)}
                 </span>
               </div>
 
@@ -291,7 +355,7 @@ export default function MessagesClient({ currentUserId, allProfiles, initialMess
                   type="text"
                   value={newMessage}
                   onChange={e => setNewMessage(e.target.value)}
-                  placeholder={`Meddelande till ${selectedProfile?.name ?? 'mottagaren'}...`}
+                  placeholder={`Meddelande till ${displayName(selectedProfile!)}...`}
                   className="flex-1 bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-xl px-3 py-2.5 text-sm placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
                 <button
