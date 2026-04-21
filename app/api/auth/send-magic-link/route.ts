@@ -1,4 +1,4 @@
-import { createServiceClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
@@ -11,10 +11,11 @@ export async function POST(request: Request) {
   const normalizedEmail = email.trim().toLowerCase()
   console.log('[send-magic-link] Försöker logga in:', normalizedEmail)
 
-  const supabase = await createServiceClient()
+  // Admin-klient (service role, ingen cookie-inblandning) för DB-queryn
+  const adminClient = createAdminClient()
 
   // Kontrollera att e-posten finns i pending_assignments
-  const { data, error: lookupError } = await supabase
+  const { data, error: lookupError } = await adminClient
     .from('pending_assignments')
     .select('email')
     .ilike('email', normalizedEmail)
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
   }
 
   // Skicka magic link via Supabase Auth
-  const { error: otpError } = await supabase.auth.signInWithOtp({
+  const { error: otpError } = await adminClient.auth.signInWithOtp({
     email: normalizedEmail,
     options: {
       emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
