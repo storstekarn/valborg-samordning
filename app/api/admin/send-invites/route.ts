@@ -1,4 +1,4 @@
-import { createServiceClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getAdminSession } from '@/lib/auth'
 import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
@@ -13,7 +13,7 @@ export async function POST() {
     return NextResponse.json({ error: 'RESEND_API_KEY saknas' }, { status: 500 })
   }
 
-  const supabase = await createServiceClient()
+  const supabase = createAdminClient()
 
   // Hämta unika e-poster från pending_assignments (alltid seedat, oavsett om
   // användarna har loggat in eller inte)
