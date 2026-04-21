@@ -2,19 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import StatusButton from './StatusButton'
-import type { Task, TaskStatus } from '@/lib/types'
-
-const STATUS_STYLES: Record<TaskStatus, string> = {
-  ej_startad: 'bg-zinc-700/60 text-zinc-400',
-  pågår:      'bg-amber-500/20 text-amber-300',
-  klar:       'bg-green-500/20 text-green-400',
-}
-
-const STATUS_LABELS: Record<TaskStatus, string> = {
-  ej_startad: 'Ej startad',
-  pågår:      'Pågår',
-  klar:       'Klar',
-}
+import type { Task } from '@/lib/types'
 
 const EVENT_DATE_LABELS: Record<string, string> = {
   fore:    'Förberedelser',
@@ -148,10 +136,7 @@ export default async function DashboardPage() {
                               <p className="text-xs text-zinc-500 leading-relaxed">{task.description}</p>
                             )}
                           </div>
-                          <div className="shrink-0 flex flex-col items-end gap-2">
-                            <span className={`text-xs font-medium px-2 py-1 rounded-full ${STATUS_STYLES[task.status]}`}>
-                              {STATUS_LABELS[task.status]}
-                            </span>
+                          <div className="shrink-0">
                             <StatusButton taskId={task.id} currentStatus={task.status} />
                           </div>
                         </div>
