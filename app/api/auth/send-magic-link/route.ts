@@ -11,15 +11,17 @@ export async function POST(request: Request) {
   const normalizedEmail = email.trim().toLowerCase()
   const supabase = await createServiceClient()
 
-  // Kontrollera att e-posten finns i pending_assignments
-  const { data, error: lookupError } = await supabase
+  // Kontrollera att e-posten finns i pending_assignments.
+  // ilike = case-insensitiv matchning (ILIKE i PostgreSQL).
+  // maybeSingle() returnerar null vid noll träffar utan att sätta error.
+  const { data } = await supabase
     .from('pending_assignments')
     .select('email')
-    .eq('email', normalizedEmail)
+    .ilike('email', normalizedEmail)
     .limit(1)
-    .single()
+    .maybeSingle()
 
-  if (lookupError || !data) {
+  if (!data) {
     return NextResponse.json(
       { error: 'Din e-postadress är inte registrerad.' },
       { status: 403 }
