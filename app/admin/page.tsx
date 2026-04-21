@@ -3,7 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import AdminIncidentRow from './AdminIncidentRow'
 import AdminTaskRow from './AdminTaskRow'
 import AdminSendInvites from './AdminSendInvites'
-import AdminMessageSender from './AdminMessageSender'
+import AdminConversations from './AdminConversations'
 import type { Task, Incident, Message, TaskStatus, Profile } from '@/lib/types'
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
@@ -20,8 +20,9 @@ const STATUS_STYLES: Record<TaskStatus, string> = {
 
 export default async function AdminPage() {
   const supabase = await createServiceClient()
+  const superadminId = process.env.SUPERADMIN_PROFILE_ID ?? ''
 
-  const [tasksRes, incidentsRes, messagesRes, pendingRes, profilesRes] = await Promise.all([
+  const [tasksRes, incidentsRes, messagesRes, pendingRes, profilesRes, superadminMessagesRes] = await Promise.all([
     supabase
       .from('tasks')
       .select('*')
@@ -43,6 +44,13 @@ export default async function AdminPage() {
       .from('profiles')
       .select('id, name, email, role, phone')
       .order('name'),
+    superadminId
+      ? supabase
+          .from('messages')
+          .select('*')
+          .or(`from_id.eq.${superadminId},to_id.eq.${superadminId}`)
+          .order('created_at', { ascending: true })
+      : Promise.resolve({ data: [] }),
   ])
 
   const tasks = (tasksRes.data as Task[]) ?? []
@@ -50,6 +58,7 @@ export default async function AdminPage() {
   const messages = (messagesRes.data ?? []) as (Message & { from_profile: { name: string } | null, to_profile: { name: string } | null })[]
   const recipientCount = new Set((pendingRes.data ?? []).map((r: { email: string }) => r.email.toLowerCase())).size
   const profiles = (profilesRes.data as Profile[]) ?? []
+  const superadminMessages = (superadminMessagesRes.data as Message[]) ?? []
 
   const totalTasks = tasks.length
   const klara = tasks.filter((t) => t.status === 'klar').length
@@ -166,12 +175,16 @@ export default async function AdminPage() {
           )}
         </section>
 
-        {/* Skicka meddelande */}
+        {/* Superadmin konversationer */}
         <section>
           <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-            Skicka meddelande
+            Konversationer
           </h2>
-          <AdminMessageSender profiles={profiles} />
+          <AdminConversations
+            superadminId={superadminId}
+            profiles={profiles}
+            initialMessages={superadminMessages}
+          />
         </section>
 
         {/* Skicka magic links */}
