@@ -219,3 +219,44 @@ INSERT INTO pending_assignments (email, task_title) VALUES
   ('robert.lillerud@gmail.com',     'Återställa förråd'),
   ('patrikstrandberg72@gmail.com',  'Återställa förråd'),
   ('petter@rotakta.se',             'Återställa förråd');
+
+
+-- --------------------------------------------
+-- 3. NAMN PER E-POST (pending_assignments)
+--
+-- Sätts via UPDATE så att INSERT-blocket ovan
+-- förblir oförändrat. Triggern hämtar name/phone
+-- via: SELECT name FROM pending_assignments
+--      WHERE lower(email) = lower(new.email) LIMIT 1
+-- --------------------------------------------
+
+UPDATE pending_assignments SET name = 'Max Angervall'        WHERE lower(email) = 'max.angervall@gmail.com';
+UPDATE pending_assignments SET name = 'Patrik Strandberg'    WHERE lower(email) = 'patrikstrandberg72@gmail.com';
+UPDATE pending_assignments SET name = 'Erik Wikström'        WHERE lower(email) = 'erikwikstrom@yahoo.se';
+UPDATE pending_assignments SET name = 'Petter'               WHERE lower(email) = 'petter@rotakta.se';
+UPDATE pending_assignments SET name = 'Harald Söderbäck'     WHERE lower(email) = 'herald.soderback@gmail.com';
+UPDATE pending_assignments SET name = 'F.C. Juhlin'          WHERE lower(email) = 'f.c.juhlin@gmail.com';
+UPDATE pending_assignments SET name = 'Sebastian Reed'        WHERE lower(email) = 'sebastianreed@icloud.com';
+UPDATE pending_assignments SET name = 'Fam Fornberg'          WHERE lower(email) = 'famfornberg@outlook.com';
+UPDATE pending_assignments SET name = 'Pelle Fransson'        WHERE lower(email) = 'pelle.fransson@gmail.com';
+UPDATE pending_assignments SET name = 'Remy Chris'            WHERE lower(email) = 'remychris@gmail.com';
+UPDATE pending_assignments SET name = 'Patrik Hammarsten'    WHERE lower(email) = 'patrik.hammarsten@gmail.com';
+UPDATE pending_assignments SET name = 'Andreas Tuvesson'     WHERE lower(email) = 'tuvesson.andreas@gmail.com';
+UPDATE pending_assignments SET name = 'Niklas Lindholm'      WHERE lower(email) = 'lindholm.niklas@icloud.com';
+UPDATE pending_assignments SET name = 'Cecilia Fagerlund'    WHERE lower(email) = 'cecilia_fagerlund@yahoo.se';
+UPDATE pending_assignments SET name = 'Vahid Fararos'        WHERE lower(email) = 'vahid.fararos@gmail.com';
+UPDATE pending_assignments SET name = 'Mikael Kerovirta'     WHERE lower(email) = 'mikaelkerovirta@gmail.com';
+UPDATE pending_assignments SET name = 'Robert Lillerud'      WHERE lower(email) = 'robert.lillerud@gmail.com';
+UPDATE pending_assignments SET name = 'Anders Westerholm'    WHERE lower(email) = 'westerholmanders@hotmail.com';
+UPDATE pending_assignments SET name = 'Elin Lillerud'        WHERE lower(email) = 'elin.lillerud@gmail.com';
+UPDATE pending_assignments SET name = 'Rebecka Frej'         WHERE lower(email) = 'rebecka.frej@me.com';
+UPDATE pending_assignments SET name = 'Fabian Ekenstam'      WHERE lower(email) = 'fabian.ekenstam@gmail.com';
+UPDATE pending_assignments SET name = 'Jon Öhman'            WHERE lower(email) = 'jonohman@gmail.com';
+UPDATE pending_assignments SET name = 'Sabrina Gunnarsson'   WHERE lower(email) = 'sabrina.gunnarsson@gmail.com';
+UPDATE pending_assignments SET name = 'Dan Gunnarsson'       WHERE lower(email) = 'dan.gunnarsson@gmail.com';
+UPDATE pending_assignments SET name = 'Philip Farkas'        WHERE lower(email) = 'philip.farkas@outlook.com';
+UPDATE pending_assignments SET name = 'Michaela Hellström'   WHERE lower(email) = 'michaela_hellstrom@yahoo.se';
+UPDATE pending_assignments SET name = 'Miao Li'              WHERE lower(email) = 'miao1416li@gmail.com';
+UPDATE pending_assignments SET name = 'Alexandra Sewerin'    WHERE lower(email) = 'p.alexandra.sewerin@gmail.com';
+UPDATE pending_assignments SET name = 'Alexander Sahno'      WHERE lower(email) = 'sahno.alexander@gmail.com';
+UPDATE pending_assignments SET name = 'Jonas'                WHERE lower(email) = 'jonas@jonapp.com';

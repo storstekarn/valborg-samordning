@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import StatusButton from './StatusButton'
+import ProfileEditor from './ProfileEditor'
 import type { Task } from '@/lib/types'
 
 const EVENT_DATE_LABELS: Record<string, string> = {
@@ -92,6 +93,18 @@ export default async function DashboardPage() {
             </p>
           )}
         </div>
+
+        {/* Min profil */}
+        <section>
+          <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+            Min profil
+          </h2>
+          <ProfileEditor
+            profileId={user.id}
+            initialName={profile?.name ?? null}
+            initialPhone={profile?.phone ?? null}
+          />
+        </section>
 
         {/* Mina uppgifter */}
         <section>

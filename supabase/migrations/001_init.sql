@@ -79,11 +79,13 @@ create table messages (
   created_at timestamptz default now()
 );
 
--- Hjälptabell: e-post → uppgiftstitel
+-- Hjälptabell: e-post → uppgiftstitel + personinfo
 -- Seedas i seed.sql. Läses av triggern när en profil skapas.
 create table pending_assignments (
   email      text,
   task_title text,
+  name       text,
+  phone      text,
   primary key (email, task_title)
 );
 
@@ -186,9 +188,13 @@ alter publication supabase_realtime add table messages;
 create or replace function handle_new_user()
 returns trigger language plpgsql security definer as $$
 begin
-  -- Skapa profil
-  insert into profiles (id, email)
-  values (new.id, new.email)
+  -- Skapa profil med namn och telefon från pending_assignments
+  insert into profiles (id, email, name, phone)
+  select
+    new.id,
+    new.email,
+    (select name  from pending_assignments where lower(email) = lower(new.email) and name  is not null limit 1),
+    (select phone from pending_assignments where lower(email) = lower(new.email) and phone is not null limit 1)
   on conflict (email) do nothing;
 
   -- Skapa task_assignments baserat på pending_assignments
