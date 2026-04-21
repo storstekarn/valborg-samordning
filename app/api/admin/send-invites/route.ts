@@ -14,12 +14,16 @@ export async function POST() {
   }
 
   const supabase = await createServiceClient()
-  const { data: profiles } = await supabase
-    .from('profiles')
-    .select('email, name')
-    .not('email', 'is', null)
 
-  if (!profiles || profiles.length === 0) {
+  // Hämta unika e-poster från pending_assignments (alltid seedat, oavsett om
+  // användarna har loggat in eller inte)
+  const { data: rows } = await supabase
+    .from('pending_assignments')
+    .select('email')
+
+  const emails = [...new Set((rows ?? []).map((r: { email: string }) => r.email.toLowerCase()))]
+
+  if (emails.length === 0) {
     return NextResponse.json({ sent: 0, errors: 0 })
   }
 
@@ -29,12 +33,11 @@ export async function POST() {
   let sent = 0
   let errors = 0
 
-  for (const profile of profiles) {
+  for (const email of emails) {
     try {
-      // Generera magic link via Supabase Admin API
       const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
         type: 'magiclink',
-        email: profile.email,
+        email,
         options: {
           redirectTo: `${siteUrl}/auth/callback`,
         },
@@ -47,10 +50,10 @@ export async function POST() {
 
       await resend.emails.send({
         from: process.env.EMAIL_FROM || 'noreply@valborg.app',
-        to: profile.email,
+        to: email,
         subject: 'Inbjudan: Valborg Infra 2026',
         html: `
-          <h2>Hej ${profile.name ?? 'du'}!</h2>
+          <h2>Hej!</h2>
           <p>Du är inbjuden att använda samordningsappen för Valborgsmässoafton 2026.</p>
           <p>Klicka på länken nedan för att logga in:</p>
           <p><a href="${linkData.properties.action_link}" style="background:#f59e0b;color:#000;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block">

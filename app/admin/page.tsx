@@ -3,7 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import AdminIncidentRow from './AdminIncidentRow'
 import AdminTaskRow from './AdminTaskRow'
 import AdminSendInvites from './AdminSendInvites'
-import type { Task, Incident, Message, Profile, TaskStatus } from '@/lib/types'
+import type { Task, Incident, Message, TaskStatus } from '@/lib/types'
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
   ej_startad: 'Ej startad',
@@ -20,7 +20,7 @@ const STATUS_STYLES: Record<TaskStatus, string> = {
 export default async function AdminPage() {
   const supabase = await createServiceClient()
 
-  const [tasksRes, incidentsRes, messagesRes, profilesRes] = await Promise.all([
+  const [tasksRes, incidentsRes, messagesRes, pendingRes] = await Promise.all([
     supabase
       .from('tasks')
       .select('*')
@@ -36,15 +36,14 @@ export default async function AdminPage() {
       .order('created_at', { ascending: false })
       .limit(50),
     supabase
-      .from('profiles')
-      .select('id, name, email, role')
-      .order('name'),
+      .from('pending_assignments')
+      .select('email'),
   ])
 
   const tasks = (tasksRes.data as Task[]) ?? []
   const incidents = (incidentsRes.data ?? []) as (Incident & { profiles: { name: string } | null })[]
   const messages = (messagesRes.data ?? []) as (Message & { from_profile: { name: string } | null, to_profile: { name: string } | null })[]
-  const profiles = (profilesRes.data as Profile[]) ?? []
+  const recipientCount = new Set((pendingRes.data ?? []).map((r: { email: string }) => r.email.toLowerCase())).size
 
   const totalTasks = tasks.length
   const klara = tasks.filter((t) => t.status === 'klar').length
@@ -166,7 +165,7 @@ export default async function AdminPage() {
           <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
             Skicka inbjudningar
           </h2>
-          <AdminSendInvites profiles={profiles} />
+          <AdminSendInvites recipientCount={recipientCount} />
         </section>
       </main>
     </div>
