@@ -9,26 +9,37 @@ export async function POST(request: Request) {
   }
 
   const normalizedEmail = email.trim().toLowerCase()
+  console.log('[send-magic-link] Försöker logga in:', normalizedEmail)
+
   const supabase = await createServiceClient()
 
-  // Kontrollera att e-posten finns i pending_assignments.
-  // ilike = case-insensitiv matchning (ILIKE i PostgreSQL).
-  // maybeSingle() returnerar null vid noll träffar utan att sätta error.
-  const { data } = await supabase
+  // Kontrollera att e-posten finns i pending_assignments
+  const { data, error: lookupError } = await supabase
     .from('pending_assignments')
     .select('email')
     .ilike('email', normalizedEmail)
     .limit(1)
     .maybeSingle()
 
+  console.log('[send-magic-link] Query-resultat:', { data, error: lookupError?.message })
+
+  if (lookupError) {
+    console.error('[send-magic-link] Supabase-fel vid lookup:', lookupError)
+    return NextResponse.json(
+      { error: 'Serverfel vid kontroll av e-post. Försök igen.' },
+      { status: 500 }
+    )
+  }
+
   if (!data) {
+    console.warn('[send-magic-link] E-post ej funnen i pending_assignments:', normalizedEmail)
     return NextResponse.json(
       { error: 'Din e-postadress är inte registrerad.' },
       { status: 403 }
     )
   }
 
-  // Skicka magic link via Supabase Auth (Supabase hanterar mejlutskick via Resend)
+  // Skicka magic link via Supabase Auth
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
 
   const { error: otpError } = await supabase.auth.signInWithOtp({
@@ -39,11 +50,13 @@ export async function POST(request: Request) {
   })
 
   if (otpError) {
+    console.error('[send-magic-link] signInWithOtp misslyckades:', otpError.message)
     return NextResponse.json(
       { error: 'Kunde inte skicka inloggningslänk. Försök igen.' },
       { status: 500 }
     )
   }
 
+  console.log('[send-magic-link] Magic link skickad till:', normalizedEmail)
   return NextResponse.json({ ok: true })
 }
