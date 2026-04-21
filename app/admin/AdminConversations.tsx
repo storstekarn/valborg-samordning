@@ -23,8 +23,10 @@ export default function AdminConversations({ superadminId, profiles, initialMess
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [reply, setReply] = useState('')
   const [sending, setSending] = useState(false)
+  const [showNewMsg, setShowNewMsg] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const newMsgRef = useRef<HTMLSelectElement>(null)
 
   // Per-partner stats
   const lastByPartner: Record<string, Message> = {}
@@ -63,7 +65,13 @@ export default function AdminConversations({ superadminId, profiles, initialMess
 
   function openConversation(id: string) {
     setSelectedId(id)
+    setShowNewMsg(false)
     setTimeout(() => inputRef.current?.focus(), 80)
+  }
+
+  function handleNewMsgToggle() {
+    setShowNewMsg(prev => !prev)
+    if (!showNewMsg) setTimeout(() => newMsgRef.current?.focus(), 80)
   }
 
   async function send(e: React.FormEvent) {
@@ -107,16 +115,48 @@ export default function AdminConversations({ superadminId, profiles, initialMess
 
       {/* Conversation list */}
       <div className="w-64 shrink-0 border-r border-zinc-800 flex flex-col overflow-hidden">
-        <div className="px-3 py-2.5 border-b border-zinc-800 flex items-center justify-between">
-          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+        <div className="px-3 py-2.5 border-b border-zinc-800 flex items-center justify-between gap-2">
+          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider shrink-0">
             Konversationer
           </span>
-          {totalUnread > 0 && (
-            <span className="text-xs bg-red-500 text-white rounded-full px-1.5 py-0.5 font-bold leading-none">
-              {totalUnread}
-            </span>
-          )}
+          <div className="flex items-center gap-1.5">
+            {totalUnread > 0 && (
+              <span className="text-xs bg-red-500 text-white rounded-full px-1.5 py-0.5 font-bold leading-none">
+                {totalUnread}
+              </span>
+            )}
+            <button
+              onClick={handleNewMsgToggle}
+              className={`text-[11px] font-medium px-2 py-1 rounded-md transition-colors
+                ${showNewMsg
+                  ? 'bg-zinc-700 text-zinc-300'
+                  : 'bg-amber-600 hover:bg-amber-500 text-white'}`}
+            >
+              {showNewMsg ? '✕ Stäng' : '+ Nytt'}
+            </button>
+          </div>
         </div>
+
+        {/* New message profile picker */}
+        {showNewMsg && (
+          <div className="px-3 py-2.5 border-b border-zinc-700 bg-zinc-800/50">
+            <p className="text-[10px] text-zinc-500 mb-1.5 font-medium uppercase tracking-wide">Välj mottagare</p>
+            <select
+              ref={newMsgRef}
+              defaultValue=""
+              onChange={e => { if (e.target.value) openConversation(e.target.value) }}
+              className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+            >
+              <option value="" disabled>— välj person —</option>
+              {[...others].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '')).map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name ?? p.email} {p.role === 'admin' ? '(Admin)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div className="overflow-y-auto flex-1">
           {sorted.map(p => {
             const last = lastByPartner[p.id]
