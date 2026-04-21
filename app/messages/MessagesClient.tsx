@@ -90,8 +90,11 @@ export default function MessagesClient({ currentUserId, allProfiles, initialMess
       <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
           <h1 className="text-base font-bold text-zinc-100">Meddelanden</h1>
-          <Link href="/dashboard" className="text-xs text-zinc-500 hover:text-zinc-300">
-            Dashboard
+          <Link
+            href="/dashboard"
+            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-zinc-100 transition-colors"
+          >
+            ← Tillbaka till dashboard
           </Link>
         </div>
       </header>
