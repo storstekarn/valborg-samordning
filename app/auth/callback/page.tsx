@@ -13,24 +13,33 @@ function CallbackHandler() {
     const code = searchParams.get('code')
 
     if (code) {
-      // PKCE flow: exchange the code for a session
+      // PKCE flow: exchange code for session server-side
       supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-        if (error) {
-          console.error('[callback] exchangeCodeForSession misslyckades:', error.message)
-          router.replace('/auth/login?error=exchange_failed')
-        } else {
-          router.replace('/dashboard')
-        }
+        router.replace(error ? '/auth/login?error=exchange_failed' : '/dashboard')
       })
-    } else {
-      // Implicit flow: Supabase JS parses #access_token from the hash automatically
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
-          router.replace('/dashboard')
-        } else {
-          router.replace('/auth/login?error=session_error')
-        }
-      })
+      return
+    }
+
+    // Implicit flow: Supabase JS client automatically reads #access_token from the URL
+    // hash when initialized. onAuthStateChange fires as soon as the token is processed.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        subscription.unsubscribe()
+        clearTimeout(timer)
+        router.replace('/dashboard')
+      }
+    })
+
+    // Fallback: if no SIGNED_IN event within 3s, try getSession directly
+    const timer = setTimeout(async () => {
+      subscription.unsubscribe()
+      const { data: { session } } = await supabase.auth.getSession()
+      router.replace(session ? '/dashboard' : '/auth/login?error=session_error')
+    }, 3000)
+
+    return () => {
+      subscription.unsubscribe()
+      clearTimeout(timer)
     }
   }, [router, searchParams])
 

@@ -3,7 +3,8 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import StatusButton from './StatusButton'
 import ProfileEditor from './ProfileEditor'
-import type { Task } from '@/lib/types'
+import IncidentBanner from './IncidentBanner'
+import type { Task, Incident } from '@/lib/types'
 
 const EVENT_DATE_LABELS: Record<string, string> = {
   fore:    'Förberedelser',
@@ -42,6 +43,13 @@ export default async function DashboardPage() {
     tasks = (data as Task[]) ?? []
   }
 
+  // Aktiva incidenter för bannern
+  const { data: activeIncidents } = await supabase
+    .from('incidents')
+    .select('id, category, message, status, admin_comment, created_at, reported_by')
+    .in('status', ['ny', 'hanteras'])
+    .order('created_at', { ascending: false })
+
   async function handleLogout() {
     'use server'
     const supabase = await createClient()
@@ -61,7 +69,7 @@ export default async function DashboardPage() {
           </div>
           <div className="flex items-center gap-2">
             <Link href="/incidents/new" className="text-xs bg-red-900/60 hover:bg-red-900 text-red-300 px-2.5 py-1.5 rounded-lg transition-colors">
-              Incident
+              Rapportera incident
             </Link>
             <Link href="/messages" className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-2.5 py-1.5 rounded-lg transition-colors">
               Meddelanden
@@ -76,6 +84,7 @@ export default async function DashboardPage() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+        <IncidentBanner initialIncidents={(activeIncidents as Incident[]) ?? []} />
         {/* Profil-kort */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
           <p className="text-xs text-zinc-500 mb-1">Inloggad som</p>
