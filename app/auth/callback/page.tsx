@@ -13,15 +13,28 @@ export default function CallbackPage() {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        router.push('/dashboard')
-      } else if (event === 'TOKEN_REFRESHED') {
-        router.push('/dashboard')
-      }
-    })
+    const handleAuth = async () => {
+      const hash = window.location.hash
+      if (hash) {
+        const params = new URLSearchParams(hash.substring(1))
+        const accessToken = params.get('access_token')
+        const refreshToken = params.get('refresh_token')
 
-    return () => subscription.unsubscribe()
+        if (accessToken && refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          })
+          if (!error) {
+            router.push('/dashboard')
+            return
+          }
+        }
+      }
+      router.push('/auth/login?error=session_error')
+    }
+
+    handleAuth()
   }, [router])
 
   return (
