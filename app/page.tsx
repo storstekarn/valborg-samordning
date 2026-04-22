@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import TaskBoard from '@/components/TaskBoard'
+import { sortTasks } from '@/lib/sortTasks'
 import type { Task } from '@/lib/types'
 
 export const revalidate = 0
@@ -8,11 +9,11 @@ export const revalidate = 0
 export default async function HomePage() {
   const supabase = await createClient()
 
-  const { data: tasks } = await supabase
+  const { data } = await supabase
     .from('tasks')
     .select('*')
-    .order('event_date')
-    .order('start_time', { nullsFirst: true })
+
+  const tasks = sortTasks((data as Task[]) ?? [])
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -35,7 +36,7 @@ export default async function HomePage() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6">
-        <TaskBoard initialTasks={(tasks as Task[]) ?? []} />
+        <TaskBoard initialTasks={tasks} />
       </main>
 
       <footer className="border-t border-zinc-900 mt-12 py-6 text-center">

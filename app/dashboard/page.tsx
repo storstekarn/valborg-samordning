@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import StatusButton from './StatusButton'
 import ProfileEditor from './ProfileEditor'
 import IncidentBanner from './IncidentBanner'
+import { sortTasks } from '@/lib/sortTasks'
 import type { Task, Incident } from '@/lib/types'
 
 const EVENT_DATE_LABELS: Record<string, string> = {
@@ -38,9 +39,7 @@ export default async function DashboardPage() {
       .from('tasks')
       .select('*')
       .in('id', taskIds)
-      .order('event_date')
-      .order('start_time', { nullsFirst: true })
-    tasks = (data as Task[]) ?? []
+    tasks = sortTasks((data as Task[]) ?? [])
   }
 
   // Aktiva incidenter för bannern

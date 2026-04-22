@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { sortTasks } from '@/lib/sortTasks'
 import type { Task, EventDate, TaskStatus } from '@/lib/types'
 
 const EVENT_DATE_LABELS: Record<EventDate, string> = {
@@ -57,15 +58,6 @@ function groupByArea(tasks: Task[]): Record<string, Task[]> {
     acc[key].push(task)
     return acc
   }, {})
-}
-
-function sortByTime(tasks: Task[]): Task[] {
-  return [...tasks].sort((a, b) => {
-    if (!a.start_time && !b.start_time) return 0
-    if (!a.start_time) return 1
-    if (!b.start_time) return -1
-    return a.start_time.localeCompare(b.start_time)
-  })
 }
 
 interface Props {
@@ -138,7 +130,7 @@ export default function TaskBoard({ initialTasks }: Props) {
 
             <div className="space-y-4">
               {Object.entries(grouped).map(([area, areaTasks]) => {
-                const sorted = sortByTime(areaTasks)
+                const sorted = sortTasks(areaTasks)
                 const areaColor = AREA_COLORS[area] ?? 'bg-zinc-700/40 text-zinc-400 border-zinc-600'
                 const borderLeft = AREA_BORDER[area] ?? 'border-l-zinc-500'
 

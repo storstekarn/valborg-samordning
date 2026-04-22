@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import AdminIncidentRow from './AdminIncidentRow'
 import AdminTaskRow from './AdminTaskRow'
+import { sortTasks } from '@/lib/sortTasks'
 import type { Task, Incident, TaskStatus } from '@/lib/types'
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
@@ -31,9 +32,7 @@ export default async function AdminPage() {
   ] = await Promise.all([
     supabase
       .from('tasks')
-      .select('*')
-      .order('event_date')
-      .order('start_time', { nullsFirst: true }),
+      .select('*'),
     supabase
       .from('incidents')
       .select('*, profiles(name, phone)')
@@ -55,7 +54,7 @@ export default async function AdminPage() {
       .select('*', { count: 'exact', head: true }),
   ])
 
-  const tasks = (tasksRes.data as Task[]) ?? []
+  const tasks = sortTasks((tasksRes.data as Task[]) ?? [])
   const activeIncidents = (activeIncidentsRes.data ?? []) as (Incident & {
     profiles: { name: string; phone: string | null } | null
   })[]
