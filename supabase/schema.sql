@@ -1,39 +1,17 @@
 -- ============================================================
--- VALBORG INFRA 2026 – Migration 001
--- Kör i Supabase SQL Editor
--- Idempotent: kan köras om utan fel – allt rivs ned och byggs upp
+-- VALBORG INFRA 2026 – Kanonisk schema-referens
+-- Speglar det aktuella databas-tillståndet.
+-- Använd supabase/migrations/001_init.sql för idempotent
+-- setup (med teardown) i en ny miljö.
 -- ============================================================
--- MÖNSTER:
---   Profiler skapas automatiskt via trigger när en användare
---   loggar in via magic link (auth.users INSERT → handle_new_user).
---
---   Triggern matchar även användarens e-post mot tabellen
---   pending_assignments och skapar task_assignments direkt –
---   ingen manuell uppföljning krävs efter inloggning.
---
---   pending_assignments seedas i seed.sql och lämnas kvar i
---   databasen som en permanent mappningstabell.
--- ============================================================
-
--- ------------------------------------------------------------
--- TEARDOWN – riv ned allt innan uppbyggnad
--- ------------------------------------------------------------
-
-drop trigger if exists on_auth_user_created on auth.users;
-drop function if exists handle_new_user();
-
-drop table if exists pending_assignments cascade;
-drop table if exists messages           cascade;
-drop table if exists incidents          cascade;
-drop table if exists task_assignments   cascade;
-drop table if exists tasks              cascade;
-drop table if exists profiles           cascade;
 
 -- ------------------------------------------------------------
 -- TABELLER
 -- ------------------------------------------------------------
 
-create table profiles (
+-- profiles.id är uuid primary key UTAN FK mot auth.users.
+-- (profiles_id_fkey har tagits bort – se STACK.md för förklaring.)
+create table if not exists profiles (
   id    uuid primary key,
   name  text,
   email text unique,
@@ -41,10 +19,7 @@ create table profiles (
   role  text default 'volunteer' check (role in ('admin', 'volunteer'))
 );
 
--- FK mot auth.users orsakar problem med trigger-flödet och tas bort
-alter table profiles drop constraint if exists profiles_id_fkey;
-
-create table tasks (
+create table if not exists tasks (
   id          uuid default gen_random_uuid() primary key,
   title       text not null,
   area        text not null,
@@ -57,23 +32,23 @@ create table tasks (
   updated_at  timestamptz
 );
 
-create table task_assignments (
+create table if not exists task_assignments (
   task_id    uuid references tasks(id) on delete cascade,
   profile_id uuid references profiles(id) on delete cascade,
   primary key (task_id, profile_id)
 );
 
-create table incidents (
-  id          uuid default gen_random_uuid() primary key,
-  reported_by uuid references profiles(id),
-  category    text not null check (category in ('brand', 'el', 'logistik', 'övrigt')),
-  message     text not null,
+create table if not exists incidents (
+  id            uuid default gen_random_uuid() primary key,
+  reported_by   uuid references profiles(id),
+  category      text not null check (category in ('brand', 'el', 'logistik', 'övrigt')),
+  message       text not null,
   status        text default 'ny' check (status in ('ny', 'hanteras', 'löst')),
   admin_comment text,
   created_at    timestamptz default now()
 );
 
-create table messages (
+create table if not exists messages (
   id         uuid default gen_random_uuid() primary key,
   from_id    uuid references profiles(id),
   to_id      uuid references profiles(id),
@@ -82,9 +57,10 @@ create table messages (
   created_at timestamptz default now()
 );
 
--- Hjälptabell: e-post → uppgiftstitel + personinfo
+-- Hjälptabell: e-post → uppgiftstitel + personinfo + roll
 -- Seedas i seed.sql. Läses av triggern när en profil skapas.
-create table pending_assignments (
+-- Ingen RLS-policy → enbart security definer-triggern når tabellen.
+create table if not exists pending_assignments (
   email      text,
   task_title text,
   name       text,
@@ -103,9 +79,8 @@ alter table task_assignments  enable row level security;
 alter table incidents         enable row level security;
 alter table messages          enable row level security;
 alter table pending_assignments enable row level security;
--- pending_assignments: inga policies → enbart triggern (security definer) når tabellen
 
--- Profiles: alla kan läsa (anon för publik sida + onboarding)
+-- Profiles: alla kan läsa
 create policy "profiles_select" on profiles
   for select using (true);
 
@@ -114,10 +89,7 @@ create policy "profiles_update_own" on profiles
   for update to authenticated
   using (auth.uid() = id);
 
--- OBS: ingen profiles_insert_own – triggern (security definer) skapar
---      profilen och kringgår RLS.
-
--- Tasks: alla läser (anon för publik körschema), tilldelade + admin uppdaterar
+-- Tasks: alla läser; tilldelade + admin uppdaterar
 create policy "tasks_select_all" on tasks
   for select using (true);
 
@@ -139,7 +111,7 @@ create policy "task_assignments_select" on task_assignments
   for select to authenticated
   using (true);
 
--- Incidents: alla inloggade skapar; volontär ser bara sina, admin ser alla
+-- Incidents: inloggade skapar; volontär ser sina, admin ser alla
 create policy "incidents_insert" on incidents
   for insert to authenticated
   with check (auth.uid() = reported_by);
@@ -157,7 +129,7 @@ create policy "incidents_update_admin" on incidents
     exists (select 1 from profiles where id = auth.uid() and role = 'admin')
   );
 
--- Messages: användare ser bara meddelanden där de är avsändare eller mottagare
+-- Messages: avsändare + mottagare ser sina meddelanden
 create policy "messages_select" on messages
   for select to authenticated
   using (from_id = auth.uid() or to_id = auth.uid());
@@ -182,18 +154,18 @@ alter publication supabase_realtime add table messages;
 -- TRIGGER: skapa profil + task_assignments vid inloggning
 --
 -- Flöde:
---   1. Användaren klickar magic link → auth.users får en ny rad
---   2. Triggern skapar en profil (id = auth user id, email)
---   3. Triggern matchar e-posten mot pending_assignments och
---      skapar task_assignments för alla matchande uppgifter
---   4. Inget manuellt steg krävs efter inloggning
+--   1. Användaren klickar magic link → auth.users ny rad
+--   2. Triggern skapar profil med name, phone, role från
+--      pending_assignments
+--   3. Triggern skapar task_assignments för alla matchande rader
+--   4. Wrappad i EXCEPTION WHEN OTHERS THEN NULL – ett fel i
+--      triggern blockerar aldrig inloggning
 -- ------------------------------------------------------------
 
 create or replace function handle_new_user()
 returns trigger language plpgsql security definer as $$
 begin
   begin
-    -- Skapa profil med namn, telefon och roll från pending_assignments
     insert into profiles (id, email, name, phone, role)
     select
       new.id,
@@ -206,7 +178,6 @@ begin
       )
     on conflict (email) do nothing;
 
-    -- Skapa task_assignments baserat på pending_assignments
     insert into task_assignments (task_id, profile_id)
     select t.id, new.id
     from pending_assignments pa
@@ -214,7 +185,7 @@ begin
     where lower(pa.email) = lower(new.email)
     on conflict do nothing;
   exception when others then
-    null; -- Blockera aldrig inloggning vid triggerfel
+    null;
   end;
 
   return new;

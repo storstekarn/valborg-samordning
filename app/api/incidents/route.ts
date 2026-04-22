@@ -1,4 +1,5 @@
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
 
@@ -32,8 +33,8 @@ export async function POST(request: Request) {
     .single()
 
   // Spara incident
-  const serviceClient = await createServiceClient()
-  const { error: insertError } = await serviceClient
+  const adminClient = createAdminClient()
+  const { error: insertError } = await adminClient
     .from('incidents')
     .insert({ reported_by: user.id, category, message: message.trim(), status: 'ny' })
 

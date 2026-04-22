@@ -318,10 +318,10 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
               <div className="hidden md:flex items-center gap-3 px-4 py-3 border-b border-zinc-800 shrink-0">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
                   ${priorityIds.has(selectedUserId) ? 'bg-amber-500/30 text-amber-300' : 'bg-zinc-700 text-zinc-300'}`}>
-                  {displayName(selectedProfile!).charAt(0).toUpperCase()}
+                  {selectedProfile ? displayName(selectedProfile).charAt(0).toUpperCase() : '?'}
                 </div>
                 <span className="font-medium text-zinc-100 text-sm">
-                  {displayName(selectedProfile!)}
+                  {selectedProfile ? displayName(selectedProfile) : ''}
                 </span>
               </div>
 
@@ -360,7 +360,7 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
                   type="text"
                   value={newMessage}
                   onChange={e => setNewMessage(e.target.value)}
-                  placeholder={`Meddelande till ${displayName(selectedProfile!)}...`}
+                  placeholder={`Meddelande till ${selectedProfile ? displayName(selectedProfile) : 'mottagaren'}...`}
                   className="flex-1 bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-xl px-3 py-2.5 text-sm placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
                 <button

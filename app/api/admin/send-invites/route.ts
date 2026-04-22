@@ -16,20 +16,14 @@ export async function POST() {
   const supabase = createAdminClient()
 
   // Hämta unika e-poster från pending_assignments
-  const { data: rows, error: rowsError } = await supabase
+  const { data: rows } = await supabase
     .from('pending_assignments')
     .select('email')
 
-  console.log('[send-invites] SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
-  console.log('[send-invites] SERVICE_ROLE_KEY prefix:', process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(0, 20))
-  console.log('[send-invites] pending_assignments rows:', rows)
-  console.log('[send-invites] pending_assignments error:', rowsError)
-
   const emails = [...new Set((rows ?? []).map((r: { email: string }) => r.email.toLowerCase()))]
-  console.log('[send-invites] unique emails count:', emails.length)
 
   if (emails.length === 0) {
-    return NextResponse.json({ sent: 0, errors: 0, debug: { rowsError: rowsError?.message ?? null } })
+    return NextResponse.json({ sent: 0, errors: 0 })
   }
 
   const resend = new Resend(process.env.RESEND_API_KEY)

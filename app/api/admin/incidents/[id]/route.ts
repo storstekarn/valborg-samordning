@@ -1,4 +1,4 @@
-import { createServiceClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getAdminSession } from '@/lib/auth'
 import { NextResponse } from 'next/server'
 import type { IncidentStatus } from '@/lib/types'
@@ -34,7 +34,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Inget att uppdatera' }, { status: 400 })
   }
 
-  const supabase = await createServiceClient()
+  const supabase = createAdminClient()
   const { error } = await supabase
     .from('incidents')
     .update(update)
