@@ -1,10 +1,9 @@
 import Link from 'next/link'
 import { createServiceClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import AdminIncidentRow from './AdminIncidentRow'
 import AdminTaskRow from './AdminTaskRow'
-import AdminSendInvites from './AdminSendInvites'
-import AdminConversations from './AdminConversations'
-import type { Task, Incident, Message, TaskStatus, Profile } from '@/lib/types'
+import type { Task, Incident, TaskStatus } from '@/lib/types'
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
   ej_startad: 'Ej startad',
@@ -20,9 +19,16 @@ const STATUS_STYLES: Record<TaskStatus, string> = {
 
 export default async function AdminPage() {
   const supabase = await createServiceClient()
+  const adminClient = createAdminClient()
   const superadminId = process.env.SUPERADMIN_PROFILE_ID ?? ''
 
-  const [tasksRes, incidentsRes, messagesRes, pendingRes, profilesRes, superadminMessagesRes] = await Promise.all([
+  const [
+    tasksRes,
+    activeIncidentsRes,
+    archivedCountRes,
+    unreadCountRes,
+    profileCountRes,
+  ] = await Promise.all([
     supabase
       .from('tasks')
       .select('*')
@@ -31,39 +37,36 @@ export default async function AdminPage() {
     supabase
       .from('incidents')
       .select('*, profiles(name, phone)')
+      .in('status', ['ny', 'hanteras'])
       .order('created_at', { ascending: false }),
     supabase
-      .from('messages')
-      .select('*, from_profile:profiles!from_id(name), to_profile:profiles!to_id(name)')
-      .order('created_at', { ascending: false })
-      .limit(50),
-    supabase
-      .from('pending_assignments')
-      .select('email'),
+      .from('incidents')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'löst'),
+    superadminId
+      ? adminClient
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('to_id', superadminId)
+          .eq('read', false)
+      : Promise.resolve({ count: 0 }),
     supabase
       .from('profiles')
-      .select('id, name, email, role, phone')
-      .order('name'),
-    superadminId
-      ? supabase
-          .from('messages')
-          .select('*')
-          .or(`from_id.eq.${superadminId},to_id.eq.${superadminId}`)
-          .order('created_at', { ascending: true })
-      : Promise.resolve({ data: [] }),
+      .select('*', { count: 'exact', head: true }),
   ])
 
   const tasks = (tasksRes.data as Task[]) ?? []
-  const incidents = (incidentsRes.data ?? []) as (Incident & { profiles: { name: string; phone: string | null } | null })[]
-  const messages = (messagesRes.data ?? []) as (Message & { from_profile: { name: string } | null, to_profile: { name: string } | null })[]
-  const recipientCount = new Set((pendingRes.data ?? []).map((r: { email: string }) => r.email.toLowerCase())).size
-  const profiles = (profilesRes.data as Profile[]) ?? []
-  const superadminMessages = (superadminMessagesRes.data as Message[]) ?? []
+  const activeIncidents = (activeIncidentsRes.data ?? []) as (Incident & {
+    profiles: { name: string; phone: string | null } | null
+  })[]
+  const archivedCount = archivedCountRes.count ?? 0
+  const unreadMessages = unreadCountRes.count ?? 0
+  const volunteerCount = profileCountRes.count ?? 0
 
   const totalTasks = tasks.length
   const klara = tasks.filter((t) => t.status === 'klar').length
   const pagar = tasks.filter((t) => t.status === 'pågår').length
-  const nyaIncidenter = incidents.filter((i) => i.status === 'ny').length
+  const nyaIncidenter = activeIncidents.filter((i) => i.status === 'ny').length
 
   async function handleLogout() {
     'use server'
@@ -91,22 +94,50 @@ export default async function AdminPage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-6 space-y-8">
+
         {/* Statistik */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: 'Totalt uppgifter', value: totalTasks, color: 'text-zinc-300' },
-            { label: 'Pågår', value: pagar, color: 'text-amber-400' },
-            { label: 'Klara', value: klara, color: 'text-green-400' },
-            { label: 'Nya incidenter', value: nyaIncidenter, color: 'text-red-400' },
-          ].map((stat) => (
-            <div key={stat.label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-center">
-              <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
-              <p className="text-xs text-zinc-500 mt-1">{stat.label}</p>
-            </div>
-          ))}
+          {/* Uppgifter */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-center">
+            <p className="text-2xl font-bold text-green-400">{klara}/{totalTasks}</p>
+            <p className="text-xs text-zinc-500 mt-1">Uppgifter klara</p>
+            {pagar > 0 && <p className="text-xs text-amber-400 mt-0.5">{pagar} pågår</p>}
+          </div>
+
+          {/* Aktiva incidenter */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-center">
+            <p className={`text-2xl font-bold ${nyaIncidenter > 0 ? 'text-red-400' : 'text-zinc-300'}`}>
+              {activeIncidents.length}
+            </p>
+            <p className="text-xs text-zinc-500 mt-1">Aktiva incidenter</p>
+            {nyaIncidenter > 0 && (
+              <p className="text-xs text-red-400 mt-0.5">{nyaIncidenter} nya</p>
+            )}
+          </div>
+
+          {/* Olästa meddelanden — klickbar */}
+          <Link
+            href="/admin/meddelanden"
+            className={`rounded-xl p-4 text-center transition-colors block
+              ${unreadMessages > 0
+                ? 'bg-red-950/30 border border-red-800 hover:bg-red-950/50'
+                : 'bg-zinc-900 border border-zinc-800 hover:bg-zinc-800'}`}
+          >
+            <p className={`text-2xl font-bold ${unreadMessages > 0 ? 'text-red-400' : 'text-zinc-300'}`}>
+              {unreadMessages}
+            </p>
+            <p className="text-xs text-zinc-500 mt-1">Olästa meddelanden</p>
+            <p className="text-xs text-amber-400 mt-0.5">→ Öppna</p>
+          </Link>
+
+          {/* Volontärer inloggade */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-center">
+            <p className="text-2xl font-bold text-zinc-300">{volunteerCount}</p>
+            <p className="text-xs text-zinc-500 mt-1">Volontärer inloggade</p>
+          </div>
         </div>
 
-        {/* Incidenter */}
+        {/* Aktiva incidenter */}
         <section>
           <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
             Incidenter
@@ -116,17 +147,30 @@ export default async function AdminPage() {
               </span>
             )}
           </h2>
-          {incidents.length === 0 ? (
+          {activeIncidents.length === 0 ? (
             <p className="text-sm text-zinc-600 bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-              Inga incidenter rapporterade.
+              Inga aktiva incidenter.
             </p>
           ) : (
             <div className="space-y-2">
-              {incidents.map((incident) => (
-                <AdminIncidentRow key={incident.id} incident={incident} reporterName={incident.profiles?.name ?? null} reporterPhone={incident.profiles?.phone ?? null} />
+              {activeIncidents.map((incident) => (
+                <AdminIncidentRow
+                  key={incident.id}
+                  incident={incident}
+                  reporterName={incident.profiles?.name ?? null}
+                  reporterPhone={incident.profiles?.phone ?? null}
+                />
               ))}
             </div>
           )}
+          <div className="mt-2">
+            <Link
+              href="/admin/incidenter/arkiv"
+              className="text-xs text-zinc-500 hover:text-zinc-300"
+            >
+              Visa arkiv ({archivedCount} lösta) →
+            </Link>
+          </div>
         </section>
 
         {/* Uppgiftsstatus */}
@@ -143,57 +187,30 @@ export default async function AdminPage() {
           </div>
         </section>
 
-        {/* Meddelanden */}
-        <section>
-          <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-            Senaste meddelanden
-          </h2>
-          {messages.length === 0 ? (
-            <p className="text-sm text-zinc-600 bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-              Inga meddelanden.
-            </p>
-          ) : (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-              <div className="divide-y divide-zinc-800">
-                {messages.slice(0, 20).map((msg) => (
-                  <div key={msg.id} className="px-4 py-3 flex items-start gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-zinc-500 mb-0.5">
-                        <span className="text-zinc-300">{msg.from_profile?.name ?? '?'}</span>
-                        {' → '}
-                        <span className="text-zinc-300">{msg.to_profile?.name ?? '?'}</span>
-                      </p>
-                      <p className="text-sm text-zinc-200">{msg.message}</p>
-                    </div>
-                    <time className="shrink-0 text-xs text-zinc-600">
-                      {new Date(msg.created_at).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })}
-                    </time>
-                  </div>
-                ))}
-              </div>
+        {/* Snabblänkar */}
+        <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Link
+            href="/admin/meddelanden"
+            className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-xl p-4 flex items-center justify-between transition-colors"
+          >
+            <div>
+              <p className="text-sm font-medium text-zinc-200">Meddelandecentral</p>
+              <p className="text-xs text-zinc-500 mt-0.5">Konversationer och systemmeddelanden</p>
             </div>
-          )}
+            <span className="text-zinc-600 text-sm">→</span>
+          </Link>
+          <Link
+            href="/admin/inbjudningar"
+            className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-xl p-4 flex items-center justify-between transition-colors"
+          >
+            <div>
+              <p className="text-sm font-medium text-zinc-200">Skicka inbjudningar</p>
+              <p className="text-xs text-zinc-500 mt-0.5">Magic links via e-post till volontärer</p>
+            </div>
+            <span className="text-zinc-600 text-sm">→</span>
+          </Link>
         </section>
 
-        {/* Superadmin konversationer */}
-        <section>
-          <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-            Konversationer
-          </h2>
-          <AdminConversations
-            superadminId={superadminId}
-            profiles={profiles}
-            initialMessages={superadminMessages}
-          />
-        </section>
-
-        {/* Skicka magic links */}
-        <section>
-          <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-            Skicka inbjudningar
-          </h2>
-          <AdminSendInvites recipientCount={recipientCount} />
-        </section>
       </main>
     </div>
   )
