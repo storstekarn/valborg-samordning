@@ -45,6 +45,7 @@ export async function POST(request: Request) {
     email: normalizedEmail,
     options: {
       emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
+      shouldCreateUser: false,
     },
   })
 
