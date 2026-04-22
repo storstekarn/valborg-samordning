@@ -84,13 +84,16 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
 
   async function markRead(partnerId: string) {
     const supabase = createClient()
-    await supabase.from('messages').update({ read: true })
+    await supabase
+      .from('messages')
+      .update({ read: true })
       .eq('from_id', partnerId)
       .eq('to_id', currentUserId)
-      .eq('read', false)
-    setMessages(prev => prev.map(m =>
-      m.from_id === partnerId && m.to_id === currentUserId ? { ...m, read: true } : m
-    ))
+    setMessages(prev =>
+      prev.map(m =>
+        m.from_id === partnerId && m.to_id === currentUserId ? { ...m, read: true } : m
+      )
+    )
   }
 
   function openConversation(userId: string) {
@@ -125,7 +128,9 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
         })
         if (m.to_id === currentUserId && m.from_id === selectedUserId) {
           const supabase = createClient()
-          supabase.from('messages').update({ read: true }).eq('id', m.id)
+          supabase.from('messages').update({ read: true })
+            .eq('id', m.id)
+            .eq('to_id', currentUserId)
           setMessages(prev => prev.map(x => x.id === m.id ? { ...x, read: true } : x))
         }
       })

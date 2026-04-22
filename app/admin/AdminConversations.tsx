@@ -63,9 +63,21 @@ export default function AdminConversations({ superadminId, profiles, initialMess
   const selectedProfile = profiles.find(p => p.id === selectedId)
   const totalUnread = Object.values(unreadByPartner).reduce((s, n) => s + n, 0)
 
+  async function markRead(partnerId: string) {
+    await fetch('/api/admin/messages/read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ partnerId }),
+    })
+    setMessages(prev => prev.map(m =>
+      m.from_id === partnerId && m.to_id === superadminId ? { ...m, read: true } : m
+    ))
+  }
+
   function openConversation(id: string) {
     setSelectedId(id)
     setShowNewMsg(false)
+    markRead(id)
     setTimeout(() => inputRef.current?.focus(), 80)
   }
 
