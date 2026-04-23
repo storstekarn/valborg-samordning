@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import InstallBanner from '@/app/dashboard/InstallBanner'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -33,9 +32,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <div className="mb-4">
-          <InstallBanner />
-        </div>
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-amber-400">Valborg Infra 2026</h1>
           <p className="text-zinc-400 text-sm mt-2">Logga in med din e-postadress</p>
