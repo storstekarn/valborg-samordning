@@ -1,11 +1,12 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import StatusButton from './StatusButton'
 import ProfileEditor from './ProfileEditor'
 import IncidentBanner from './IncidentBanner'
+import InstallBanner from './InstallBanner'
+import TaskCard from './TaskCard'
 import { sortTasks } from '@/lib/sortTasks'
-import type { Task, Incident } from '@/lib/types'
+import type { Task, Incident, Profile } from '@/lib/types'
 
 const EVENT_DATE_LABELS: Record<string, string> = {
   fore:    'Förberedelser',
@@ -19,35 +20,48 @@ export default async function DashboardPage() {
 
   if (!user) redirect('/auth/login')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
+  // Hämta profil, uppgiftstilldelningar och aktiva incidenter parallellt
+  const [profileRes, assignmentsRes, incidentsRes] = await Promise.all([
+    supabase.from('profiles').select('*').eq('id', user.id).single(),
+    supabase.from('task_assignments').select('task_id').eq('profile_id', user.id),
+    supabase
+      .from('incidents')
+      .select('id, category, message, status, admin_comment, created_at, reported_by')
+      .in('status', ['ny', 'hanteras'])
+      .order('created_at', { ascending: false }),
+  ])
 
-  // Hämta tilldelade uppgifter
-  const { data: assignments } = await supabase
-    .from('task_assignments')
-    .select('task_id')
-    .eq('profile_id', user.id)
-
-  const taskIds = (assignments ?? []).map((a) => a.task_id)
+  const profile = profileRes.data
+  const taskIds = (assignmentsRes.data ?? []).map((a: { task_id: string }) => a.task_id)
+  const activeIncidents = (incidentsRes.data as Incident[]) ?? []
 
   let tasks: Task[] = []
-  if (taskIds.length > 0) {
-    const { data } = await supabase
-      .from('tasks')
-      .select('*')
-      .in('id', taskIds)
-    tasks = sortTasks((data as Task[]) ?? [])
-  }
+  let coAssignMap: Record<string, Profile[]> = {}
 
-  // Aktiva incidenter för bannern
-  const { data: activeIncidents } = await supabase
-    .from('incidents')
-    .select('id, category, message, status, admin_comment, created_at, reported_by')
-    .in('status', ['ny', 'hanteras'])
-    .order('created_at', { ascending: false })
+  if (taskIds.length > 0) {
+    // Hämta uppgifter och medansvariga parallellt
+    const [tasksRes, coAssignRes] = await Promise.all([
+      supabase.from('tasks').select('*').in('id', taskIds),
+      supabase
+        .from('task_assignments')
+        .select('task_id, profiles(id, name, email, phone, role)')
+        .in('task_id', taskIds)
+        .neq('profile_id', user.id),
+    ])
+
+    tasks = sortTasks((tasksRes.data as Task[]) ?? [])
+
+    // Bygg { taskId → Profile[] }
+    for (const row of (coAssignRes.data ?? []) as {
+      task_id: string
+      profiles: Profile | Profile[] | null
+    }[]) {
+      const p = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
+      if (!p) continue
+      if (!coAssignMap[row.task_id]) coAssignMap[row.task_id] = []
+      coAssignMap[row.task_id].push(p)
+    }
+  }
 
   async function handleLogout() {
     'use server'
@@ -83,7 +97,9 @@ export default async function DashboardPage() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-        <IncidentBanner initialIncidents={(activeIncidents as Incident[]) ?? []} />
+        <IncidentBanner initialIncidents={activeIncidents} />
+        <InstallBanner />
+
         {/* Profil-kort */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
           <p className="text-xs text-zinc-500 mb-1">Inloggad som</p>
@@ -125,47 +141,27 @@ export default async function DashboardPage() {
               Inga uppgifter tilldelade ännu.
             </p>
           ) : (
-            <div className="space-y-3">
-              {Object.entries(
-                tasks.reduce<Record<string, Task[]>>((acc, t) => {
-                  const key = t.event_date
-                  if (!acc[key]) acc[key] = []
-                  acc[key].push(t)
-                  return acc
-                }, {})
-              ).map(([date, dateTasks]) => (
-                <div key={date}>
-                  <p className="text-xs text-zinc-600 font-medium mb-2 uppercase tracking-wide">
-                    {EVENT_DATE_LABELS[date] ?? date}
-                  </p>
-                  <div className="space-y-2">
-                    {dateTasks.map((task) => (
-                      <div key={task.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap mb-1">
-                              <span className="text-sm font-medium text-zinc-100">{task.title}</span>
-                              <span className="text-xs text-zinc-500">{task.area}</span>
-                            </div>
-                            {(task.start_time || task.end_time) && (
-                              <p className="text-xs text-zinc-500 font-mono mb-1">
-                                {task.start_time ?? ''}
-                                {task.end_time ? ` – ${task.end_time}` : ''}
-                              </p>
-                            )}
-                            {task.description && (
-                              <p className="text-xs text-zinc-500 leading-relaxed">{task.description}</p>
-                            )}
-                          </div>
-                          <div className="shrink-0">
-                            <StatusButton taskId={task.id} currentStatus={task.status} />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+            <div className="space-y-4">
+              {(['fore', 'valborg', '1maj'] as const).map(date => {
+                const dateTasks = tasks.filter(t => t.event_date === date)
+                if (dateTasks.length === 0) return null
+                return (
+                  <div key={date}>
+                    <p className="text-xs text-zinc-600 font-medium mb-2 uppercase tracking-wide">
+                      {EVENT_DATE_LABELS[date]}
+                    </p>
+                    <div className="space-y-2">
+                      {dateTasks.map(task => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          coAssignees={coAssignMap[task.id] ?? []}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </section>

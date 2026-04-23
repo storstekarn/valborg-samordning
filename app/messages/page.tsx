@@ -3,7 +3,12 @@ import { createClient } from '@/lib/supabase/server'
 import MessagesClient from './MessagesClient'
 import type { Profile, Message } from '@/lib/types'
 
-export default async function MessagesPage() {
+export default async function MessagesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ with?: string }>
+}) {
+  const { with: defaultPartnerId } = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -71,6 +76,7 @@ export default async function MessagesPage() {
       sameAreaProfiles={sameAreaProfiles}
       initialMessages={messages}
       superadminEmail={process.env.SUPERADMIN_EMAIL ?? ''}
+      defaultPartnerId={defaultPartnerId}
     />
   )
 }

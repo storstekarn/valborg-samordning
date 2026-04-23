@@ -53,6 +53,7 @@ create table tasks (
   start_time  text,
   end_time    text,
   status      text default 'ej_startad' check (status in ('ej_startad', 'pågår', 'klar')),
+  notes       text,
   updated_by  uuid references profiles(id),
   updated_at  timestamptz
 );

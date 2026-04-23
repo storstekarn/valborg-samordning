@@ -11,6 +11,7 @@ interface Props {
   sameAreaProfiles: Profile[]
   initialMessages: Message[]
   superadminEmail: string
+  defaultPartnerId?: string
 }
 
 function formatTime(iso: string) {
@@ -25,12 +26,14 @@ function displayName(p: Profile): string {
   return p.name ?? 'Okänd'
 }
 
-export default function MessagesClient({ currentUserId, allProfiles, sameAreaProfiles, initialMessages, superadminEmail }: Props) {
+export default function MessagesClient({ currentUserId, allProfiles, sameAreaProfiles, initialMessages, superadminEmail, defaultPartnerId }: Props) {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(defaultPartnerId ?? null)
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
-  const [mobileView, setMobileView] = useState<'list' | 'conversation'>('list')
+  const [mobileView, setMobileView] = useState<'list' | 'conversation'>(
+    defaultPartnerId ? 'conversation' : 'list'
+  )
   const [showNewMsg, setShowNewMsg] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -113,6 +116,21 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
     setMobileView('list')
     setSelectedUserId(null)
   }
+
+  // Mark pre-selected conversation as read on mount
+  useEffect(() => {
+    if (!defaultPartnerId) return
+    const supabase = createClient()
+    supabase.from('messages').update({ read: true })
+      .eq('from_id', defaultPartnerId)
+      .eq('to_id', currentUserId)
+    setMessages(prev =>
+      prev.map(m =>
+        m.from_id === defaultPartnerId && m.to_id === currentUserId ? { ...m, read: true } : m
+      )
+    )
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Realtime
   useEffect(() => {

@@ -22,6 +22,7 @@ export interface Task {
   start_time: string | null
   end_time: string | null
   status: TaskStatus
+  notes: string | null
   updated_by: string | null
   updated_at: string | null
 }

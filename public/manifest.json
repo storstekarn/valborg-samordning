@@ -1,0 +1,25 @@
+{
+  "name": "Valborg Infra 2026",
+  "short_name": "Valborg Infra",
+  "description": "Samordningsapp för infrastrukturgruppen – Valborgsmässoafton 2026",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#09090b",
+  "theme_color": "#18181b",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
