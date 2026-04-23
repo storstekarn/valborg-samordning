@@ -66,7 +66,7 @@ export default function TaskCard({ task, coAssignees }: Props) {
               onClick={toggleExpand}
               className="mt-1 text-xs font-medium px-2.5 py-1 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 transition-colors"
             >
-              {expanded ? 'Stäng' : '📝 Anteckningar'}
+              {expanded ? 'Stäng' : '📝 Öppna'}
             </button>
           </div>
 
