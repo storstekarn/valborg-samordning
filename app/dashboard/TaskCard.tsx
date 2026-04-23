@@ -91,15 +91,27 @@ export default function TaskCard({ task, coAssignees }: Props) {
               <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
                 Medansvariga
               </p>
-              <div className="flex flex-wrap gap-2">
+              <div className="divide-y divide-zinc-800/60">
                 {coAssignees.map(p => (
-                  <Link
-                    key={p.id}
-                    href={`/messages?with=${p.id}`}
-                    className="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 text-amber-400 hover:text-amber-300 px-2.5 py-1.5 rounded-lg transition-colors"
-                  >
-                    {p.name ?? p.email} →
-                  </Link>
+                  <div key={p.id} className="flex items-center justify-between gap-2 py-2 first:pt-0 last:pb-0">
+                    <span className="text-sm text-zinc-200 truncate">{p.name ?? p.email}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Link
+                        href={`/messages?with=${p.id}`}
+                        className="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 text-amber-400 hover:text-amber-300 transition-colors"
+                      >
+                        💬 Appmeddelande
+                      </Link>
+                      {p.phone && (
+                        <a
+                          href={`tel:${p.phone.replace(/\s/g, '')}`}
+                          className="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 text-zinc-300 hover:text-zinc-100 transition-colors"
+                        >
+                          📞 {p.phone}
+                        </a>
+                      )}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
