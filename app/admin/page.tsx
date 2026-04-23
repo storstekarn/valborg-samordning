@@ -189,6 +189,16 @@ export default async function AdminPage() {
         {/* Snabblänkar */}
         <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Link
+            href="/admin/redigera"
+            className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-xl p-4 flex items-center justify-between transition-colors"
+          >
+            <div>
+              <p className="text-sm font-medium text-zinc-200">Redigera schema</p>
+              <p className="text-xs text-zinc-500 mt-0.5">Uppgifter, tilldelningar och volontärer</p>
+            </div>
+            <span className="text-zinc-600 text-sm">→</span>
+          </Link>
+          <Link
             href="/admin/meddelanden"
             className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-xl p-4 flex items-center justify-between transition-colors"
           >
