@@ -1,12 +1,13 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import ProfileEditor from './ProfileEditor'
 import IncidentBanner from './IncidentBanner'
 import InstallBanner from './InstallBanner'
 import TaskCard from './TaskCard'
 import { sortTasks } from '@/lib/sortTasks'
-import type { Task, Incident, Profile } from '@/lib/types'
+import type { Task, Incident, Profile, CoAssignee } from '@/lib/types'
 
 const EVENT_DATE_LABELS: Record<string, string> = {
   fore:    'Förberedelser',
@@ -36,10 +37,10 @@ export default async function DashboardPage() {
   const activeIncidents = (incidentsRes.data as Incident[]) ?? []
 
   let tasks: Task[] = []
-  let coAssignMap: Record<string, Profile[]> = {}
+  let coAssigneeMap: Record<string, CoAssignee[]> = {}
 
   if (taskIds.length > 0) {
-    // Hämta uppgifter och medansvariga parallellt
+    // Hämta uppgifter och inloggade medansvariga parallellt
     const [tasksRes, coAssignRes] = await Promise.all([
       supabase.from('tasks').select('*').in('id', taskIds),
       supabase
@@ -51,15 +52,38 @@ export default async function DashboardPage() {
 
     tasks = sortTasks((tasksRes.data as Task[]) ?? [])
 
-    // Bygg { taskId → Profile[] }
+    // Bygg { taskId → CoAssignee[] } med inloggade användare
     for (const row of (coAssignRes.data ?? []) as {
       task_id: string
       profiles: Profile | Profile[] | null
     }[]) {
       const p = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
       if (!p) continue
-      if (!coAssignMap[row.task_id]) coAssignMap[row.task_id] = []
-      coAssignMap[row.task_id].push(p)
+      if (!coAssigneeMap[row.task_id]) coAssigneeMap[row.task_id] = []
+      coAssigneeMap[row.task_id].push({ id: p.id, name: p.name, email: p.email, phone: p.phone, isPending: false })
+    }
+
+    // Hämta pending_assignments för dessa uppgifter (kräver admin-klient, ingen RLS SELECT-policy)
+    const taskTitleToId: Record<string, string> = {}
+    for (const task of tasks) {
+      taskTitleToId[task.title.toLowerCase()] = task.id
+    }
+
+    const adminClient = createAdminClient()
+    const { data: pendingRows } = await adminClient
+      .from('pending_assignments')
+      .select('email, name, task_title')
+      .in('task_title', tasks.map(t => t.title))
+      .neq('task_title', '')
+
+    for (const row of pendingRows ?? []) {
+      const taskId = taskTitleToId[row.task_title?.toLowerCase()]
+      if (!taskId) continue
+      if (row.email?.toLowerCase() === user.email?.toLowerCase()) continue
+      const existing = coAssigneeMap[taskId] ?? []
+      if (existing.some(c => c.email.toLowerCase() === row.email.toLowerCase())) continue
+      if (!coAssigneeMap[taskId]) coAssigneeMap[taskId] = []
+      coAssigneeMap[taskId].push({ id: null, name: row.name ?? null, email: row.email, phone: null, isPending: true })
     }
   }
 
@@ -155,7 +179,7 @@ export default async function DashboardPage() {
                         <TaskCard
                           key={task.id}
                           task={task}
-                          coAssignees={coAssignMap[task.id] ?? []}
+                          coAssignees={coAssigneeMap[task.id] ?? []}
                         />
                       ))}
                     </div>

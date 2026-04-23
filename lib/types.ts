@@ -27,6 +27,14 @@ export interface Task {
   updated_at: string | null
 }
 
+export interface CoAssignee {
+  id: string | null
+  name: string | null
+  email: string
+  phone: string | null
+  isPending: boolean
+}
+
 export interface TaskWithAssignees extends Task {
   assignees?: Profile[]
 }

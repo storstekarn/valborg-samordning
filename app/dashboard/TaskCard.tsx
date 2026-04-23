@@ -3,11 +3,11 @@
 import { useState, useRef } from 'react'
 import Link from 'next/link'
 import StatusButton from './StatusButton'
-import type { Task, Profile } from '@/lib/types'
+import type { Task, CoAssignee } from '@/lib/types'
 
 interface Props {
   task: Task
-  coAssignees: Profile[]
+  coAssignees: CoAssignee[]
 }
 
 export default function TaskCard({ task, coAssignees }: Props) {
@@ -93,24 +93,31 @@ export default function TaskCard({ task, coAssignees }: Props) {
               </p>
               <div className="divide-y divide-zinc-800/60">
                 {coAssignees.map(p => (
-                  <div key={p.id} className="flex items-center justify-between gap-2 py-2 first:pt-0 last:pb-0">
-                    <span className="text-sm text-zinc-200 truncate">{p.name ?? p.email}</span>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <Link
-                        href={`/messages?with=${p.id}`}
-                        className="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 text-amber-400 hover:text-amber-300 transition-colors"
-                      >
-                        💬 Appmeddelande
-                      </Link>
-                      {p.phone && (
-                        <a
-                          href={`tel:${p.phone.replace(/\s/g, '')}`}
-                          className="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 text-zinc-300 hover:text-zinc-100 transition-colors"
-                        >
-                          📞 {p.phone}
-                        </a>
+                  <div key={p.id ?? p.email} className="flex items-center justify-between gap-2 py-2 first:pt-0 last:pb-0">
+                    <div className="min-w-0">
+                      <span className="text-sm text-zinc-200 truncate block">{p.name ?? p.email}</span>
+                      {p.isPending && (
+                        <span className="text-xs text-zinc-600">Ej inloggad än</span>
                       )}
                     </div>
+                    {!p.isPending && (
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Link
+                          href={`/messages?with=${p.id}`}
+                          className="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 text-amber-400 hover:text-amber-300 transition-colors"
+                        >
+                          💬 Appmeddelande
+                        </Link>
+                        {p.phone && (
+                          <a
+                            href={`tel:${p.phone.replace(/\s/g, '')}`}
+                            className="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 text-zinc-300 hover:text-zinc-100 transition-colors"
+                          >
+                            📞 {p.phone}
+                          </a>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
