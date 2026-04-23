@@ -62,25 +62,24 @@ export default function TaskCard({ task, coAssignees }: Props) {
             {task.description && (
               <p className="text-xs text-zinc-500 leading-relaxed mb-2">{task.description}</p>
             )}
+            <button
+              onClick={toggleExpand}
+              className="mt-1 text-xs font-medium px-2.5 py-1 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 transition-colors"
+            >
+              {expanded ? 'Stäng' : '📝 Anteckningar'}
+            </button>
           </div>
-          {/* StatusButton – stopPropagation so it doesn't toggle expand */}
-          <div className="shrink-0" onClick={e => e.stopPropagation()}>
+
+          {/* Status + medansvariga – högerjusterat */}
+          <div className="shrink-0 flex flex-col items-end gap-1.5" onClick={e => e.stopPropagation()}>
             <StatusButton taskId={task.id} currentStatus={task.status} />
+            {coAssignees.length > 0 && (
+              <span className="text-xs text-zinc-600">
+                {coAssignees.length} medansvarig{coAssignees.length > 1 ? 'a' : ''}
+              </span>
+            )}
           </div>
         </div>
-
-        {/* Expand toggle */}
-        <button
-          onClick={toggleExpand}
-          className="mt-2 text-xs text-zinc-500 hover:text-amber-400 transition-colors flex items-center gap-1"
-        >
-          {expanded ? '↑ Dölj' : '↓ Tryck för att läsa/redigera anteckningar'}
-          {coAssignees.length > 0 && !expanded && (
-            <span className="text-zinc-600">
-              {' '}· {coAssignees.length} medansvarig{coAssignees.length > 1 ? 'a' : ''}
-            </span>
-          )}
-        </button>
       </div>
 
       {/* Expanded section */}
