@@ -18,7 +18,7 @@ export default async function RedigeraPage() {
     supabase.from('task_assignments').select('task_id, profile_id'),
     supabase
       .from('pending_assignments')
-      .select('email, task_title, name, phone, role')
+      .select('email, task_title, name, phone')
       .neq('task_title', ''),
   ])
 
@@ -26,7 +26,7 @@ export default async function RedigeraPage() {
   const profiles = (profilesRes.data as Profile[]) ?? []
   const assignments = (assignmentsRes.data ?? []) as { task_id: string; profile_id: string }[]
   const pendingRows = (pendingRes.data ?? []) as {
-    email: string; task_title: string; name: string | null; phone: string | null; role: string
+    email: string; task_title: string; name: string | null; phone: string | null
   }[]
 
   // ── DEBUG ──────────────────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ export default async function RedigeraPage() {
     if (profile) {
       list.push({ key: `p:${profile.id}`, id: profile.id, email: profile.email, name: profile.name, phone: profile.phone, role: profile.role, loggedIn: true })
     } else {
-      list.push({ key: `pending:${email}`, id: null, email, name: row.name ?? null, phone: row.phone ?? null, role: (row.role as UserRole) ?? 'volunteer', loggedIn: false })
+      list.push({ key: `pending:${email}`, id: null, email, name: row.name ?? null, phone: row.phone ?? null, role: 'volunteer', loggedIn: false })
     }
   }
 
@@ -100,7 +100,7 @@ export default async function RedigeraPage() {
   for (const row of pendingRows) {
     const email = row.email.toLowerCase()
     if (!profileEmails.has(email) && !pendingVolMap.has(email)) {
-      pendingVolMap.set(email, { key: `pending:${email}`, id: null, email, name: row.name ?? null, phone: row.phone ?? null, role: (row.role as UserRole) ?? 'volunteer', loggedIn: false })
+      pendingVolMap.set(email, { key: `pending:${email}`, id: null, email, name: row.name ?? null, phone: row.phone ?? null, role: 'volunteer', loggedIn: false })
     }
   }
   const allVols: VEntry[] = [
