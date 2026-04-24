@@ -4,7 +4,7 @@ import { getAdminSession } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sortTasks } from '@/lib/sortTasks'
 import RedigeraClient from './RedigeraClient'
-import type { Task, Profile, PendingVolEntry, UserRole } from '@/lib/types'
+import type { Task, Profile, VEntry, UserRole } from '@/lib/types'
 
 export default async function RedigeraPage() {
   const session = await getAdminSession()
@@ -16,51 +16,67 @@ export default async function RedigeraPage() {
     supabase.from('tasks').select('*'),
     supabase.from('profiles').select('*').order('name'),
     supabase.from('task_assignments').select('task_id, profile_id'),
-    supabase.from('pending_assignments').select('email, task_title, name, phone, role'),
+    supabase
+      .from('pending_assignments')
+      .select('email, task_title, name, phone, role')
+      .neq('task_title', ''),
   ])
 
   const tasks = sortTasks((tasksRes.data as Task[]) ?? [])
   const profiles = (profilesRes.data as Profile[]) ?? []
   const assignments = (assignmentsRes.data ?? []) as { task_id: string; profile_id: string }[]
-  const pendingRows = (pendingRes.data ?? []) as { email: string; task_title: string; name: string | null; phone: string | null; role: string }[]
+  const pendingRows = (pendingRes.data ?? []) as {
+    email: string; task_title: string; name: string | null; phone: string | null; role: string
+  }[]
 
-  // Unika e-poster som redan är inloggade (har en profil)
+  const profileByEmail = new Map(profiles.map(p => [p.email.toLowerCase(), p]))
+  const profileById   = new Map(profiles.map(p => [p.id, p]))
+  const taskTitleToId = new Map(tasks.map(t => [t.title.toLowerCase(), t.id]))
+
+  // ── assigneesPerTask: samma server-side-logik som dashboarden ──────────────
+  // Fas 1: task_assignments (inloggade användare)
+  const assigneesPerTask: Record<string, VEntry[]> = {}
+  for (const a of assignments) {
+    const p = profileById.get(a.profile_id)
+    if (!p) continue
+    if (!assigneesPerTask[a.task_id]) assigneesPerTask[a.task_id] = []
+    const list = assigneesPerTask[a.task_id]
+    if (!list.some(v => v.email.toLowerCase() === p.email.toLowerCase())) {
+      list.push({ key: `p:${p.id}`, id: p.id, email: p.email, name: p.name, phone: p.phone, role: p.role, loggedIn: true })
+    }
+  }
+
+  // Fas 2: pending_assignments – alla rader, dedup på e-post
+  for (const row of pendingRows) {
+    const email  = row.email.toLowerCase()
+    const taskId = taskTitleToId.get(row.task_title.toLowerCase())
+    if (!taskId) continue
+    if (!assigneesPerTask[taskId]) assigneesPerTask[taskId] = []
+    const list = assigneesPerTask[taskId]
+    if (list.some(v => v.email.toLowerCase() === email)) continue // redan tillagd
+
+    // Kontrollera om personen faktiskt loggat in (finns i profiles)
+    const profile = profileByEmail.get(email)
+    if (profile) {
+      list.push({ key: `p:${profile.id}`, id: profile.id, email: profile.email, name: profile.name, phone: profile.phone, role: profile.role, loggedIn: true })
+    } else {
+      list.push({ key: `pending:${email}`, id: null, email, name: row.name ?? null, phone: row.phone ?? null, role: (row.role as UserRole) ?? 'volunteer', loggedIn: false })
+    }
+  }
+
+  // ── allVols: alla volontärer för dropdown och volontärfliken ──────────────
   const profileEmails = new Set(profiles.map(p => p.email.toLowerCase()))
-
-  // Bygg upp karta: task title (lowercase) → task id
-  const taskTitleMap = new Map(tasks.map(t => [t.title.toLowerCase(), t.id]))
-
-  // Pending-volontärer: unika per e-post, inte i profiles
-  const pendingVolMap = new Map<string, PendingVolEntry>()
+  const pendingVolMap = new Map<string, VEntry>()
   for (const row of pendingRows) {
     const email = row.email.toLowerCase()
     if (!profileEmails.has(email) && !pendingVolMap.has(email)) {
-      pendingVolMap.set(email, {
-        email,
-        name: row.name ?? null,
-        phone: row.phone ?? null,
-        role: (row.role as UserRole) ?? 'volunteer',
-      })
+      pendingVolMap.set(email, { key: `pending:${email}`, id: null, email, name: row.name ?? null, phone: row.phone ?? null, role: (row.role as UserRole) ?? 'volunteer', loggedIn: false })
     }
   }
-  const pendingVols = Array.from(pendingVolMap.values())
-
-  // Pending-tilldelningar: task_id-baserade, ALLA rader oavsett om personen loggat in.
-  // Deduplicering på e-post sker client-side i assigneesFor (task_assignments vinner).
-  const pendingTaskAssignments: { task_id: string; email: string; name: string | null }[] = []
-  const seen = new Set<string>()
-  for (const row of pendingRows) {
-    if (!row.task_title) continue
-    const email = row.email.toLowerCase()
-    const taskId = taskTitleMap.get(row.task_title.toLowerCase())
-    if (taskId) {
-      const key = `${taskId}:${email}`
-      if (!seen.has(key)) {
-        seen.add(key)
-        pendingTaskAssignments.push({ task_id: taskId, email, name: row.name ?? null })
-      }
-    }
-  }
+  const allVols: VEntry[] = [
+    ...profiles.map(p => ({ key: `p:${p.id}`, id: p.id, email: p.email, name: p.name, phone: p.phone, role: p.role, loggedIn: true } as VEntry)),
+    ...Array.from(pendingVolMap.values()),
+  ]
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -79,10 +95,8 @@ export default async function RedigeraPage() {
       <main className="max-w-4xl mx-auto px-4 py-6">
         <RedigeraClient
           initialTasks={tasks}
-          initialProfiles={profiles}
-          initialAssignments={assignments}
-          initialPendingVols={pendingVols}
-          initialPendingTaskAssignments={pendingTaskAssignments}
+          initialAllVols={allVols}
+          initialAssigneesPerTask={assigneesPerTask}
         />
       </main>
     </div>

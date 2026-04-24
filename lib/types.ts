@@ -20,6 +20,17 @@ export interface PendingVolEntry {
   role: UserRole
 }
 
+// Enhetlig volontärpost för admin-UI: inloggad (profil) eller väntande (pending)
+export interface VEntry {
+  key: string       // "p:{uuid}" för profiler, "pending:{email}" för ej inloggade
+  id: string | null // profile UUID om inloggad, annars null
+  email: string
+  name: string | null
+  phone: string | null
+  role: UserRole
+  loggedIn: boolean
+}
+
 export interface Task {
   id: string
   title: string
