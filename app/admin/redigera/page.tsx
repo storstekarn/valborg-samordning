@@ -45,19 +45,19 @@ export default async function RedigeraPage() {
   }
   const pendingVols = Array.from(pendingVolMap.values())
 
-  // Pending-tilldelningar: task_id-baserade (för pending-volontärer)
-  const pendingTaskAssignments: { task_id: string; email: string }[] = []
+  // Pending-tilldelningar: task_id-baserade, ALLA rader oavsett om personen loggat in.
+  // Deduplicering på e-post sker client-side i assigneesFor (task_assignments vinner).
+  const pendingTaskAssignments: { task_id: string; email: string; name: string | null }[] = []
   const seen = new Set<string>()
   for (const row of pendingRows) {
+    if (!row.task_title) continue
     const email = row.email.toLowerCase()
-    if (!profileEmails.has(email) && row.task_title) {
-      const taskId = taskTitleMap.get(row.task_title.toLowerCase())
-      if (taskId) {
-        const key = `${taskId}:${email}`
-        if (!seen.has(key)) {
-          seen.add(key)
-          pendingTaskAssignments.push({ task_id: taskId, email })
-        }
+    const taskId = taskTitleMap.get(row.task_title.toLowerCase())
+    if (taskId) {
+      const key = `${taskId}:${email}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        pendingTaskAssignments.push({ task_id: taskId, email, name: row.name ?? null })
       }
     }
   }

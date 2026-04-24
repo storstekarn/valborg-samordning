@@ -12,6 +12,7 @@ interface Assignment {
 interface PendingAssignment {
   task_id: string
   email: string
+  name: string | null
 }
 
 // Enhetlig volontärpost – inloggad (profil) eller väntande (pending)
@@ -120,36 +121,69 @@ export default function RedigeraClient({
   // ─── Helpers ─────────────────────────────────────────────────────────────────
 
   function assigneesFor(taskId: string): VEntry[] {
-    const profileKeys = new Set(
-      assignments.filter(a => a.task_id === taskId).map(a => `p:${a.profile_id}`)
-    )
-    const pendingKeys = new Set(
-      pendingTaskAssignments.filter(pa => pa.task_id === taskId).map(pa => `pending:${pa.email}`)
-    )
-    return allVols.filter(v => profileKeys.has(v.key) || pendingKeys.has(v.key))
+    const result: VEntry[] = []
+    const emailsSeen = new Set<string>()
+
+    // 1. task_assignments (inloggade) – dessa visas alltid med profildata
+    for (const a of assignments) {
+      if (a.task_id !== taskId) continue
+      const vol = allVols.find(v => v.key === `p:${a.profile_id}`)
+      if (vol && !emailsSeen.has(vol.email.toLowerCase())) {
+        result.push(vol)
+        emailsSeen.add(vol.email.toLowerCase())
+      }
+    }
+
+    // 2. pending_assignments – visa alla som inte redan visas via task_assignments
+    for (const pa of pendingTaskAssignments) {
+      if (pa.task_id !== taskId) continue
+      const email = pa.email.toLowerCase()
+      if (emailsSeen.has(email)) continue
+      // Hitta i allVols (kan vara inloggad men sakna task_assignment, eller pending)
+      const vol = allVols.find(v => v.email.toLowerCase() === email)
+      if (vol) {
+        result.push(vol)
+      } else {
+        // Person finns i pending_assignments men inte i allVols (ovanligt edge case)
+        result.push({
+          key: `pending:${email}`,
+          id: null,
+          email,
+          name: pa.name,
+          phone: null,
+          role: 'volunteer',
+          loggedIn: false,
+        })
+      }
+      emailsSeen.add(email)
+    }
+
+    return result
   }
 
   function tasksFor(volKey: string): Task[] {
-    if (volKey.startsWith('p:')) {
-      const profileId = volKey.slice(2)
-      return assignments
-        .filter(a => a.profile_id === profileId)
-        .map(a => tasks.find(t => t.id === a.task_id))
-        .filter((t): t is Task => Boolean(t))
-    }
-    const email = volKey.slice('pending:'.length)
-    return pendingTaskAssignments
-      .filter(pa => pa.email === email)
-      .map(pa => tasks.find(t => t.id === pa.task_id))
-      .filter((t): t is Task => Boolean(t))
+    const email = volKey.startsWith('p:')
+      ? allVols.find(v => v.key === volKey)?.email.toLowerCase() ?? ''
+      : volKey.slice('pending:'.length)
+
+    // Kombinera båda källor för att visa alla tilldelade uppgifter
+    const taskIdsFromProfile = volKey.startsWith('p:')
+      ? assignments.filter(a => a.profile_id === volKey.slice(2)).map(a => a.task_id)
+      : []
+    const taskIdsFromPending = email
+      ? pendingTaskAssignments.filter(pa => pa.email.toLowerCase() === email).map(pa => pa.task_id)
+      : []
+    const allTaskIds = [...new Set([...taskIdsFromProfile, ...taskIdsFromPending])]
+    return allTaskIds.map(id => tasks.find(t => t.id === id)).filter((t): t is Task => Boolean(t))
   }
 
   function unassignedFor(taskId: string): VEntry[] {
-    const profileIds = new Set(assignments.filter(a => a.task_id === taskId).map(a => a.profile_id))
-    const pendingEmails = new Set(pendingTaskAssignments.filter(pa => pa.task_id === taskId).map(pa => pa.email))
+    const assignedProfileIds = new Set(assignments.filter(a => a.task_id === taskId).map(a => a.profile_id))
+    const assignedEmails = new Set(pendingTaskAssignments.filter(pa => pa.task_id === taskId).map(pa => pa.email.toLowerCase()))
     return allVols.filter(v => {
-      if (v.loggedIn) return !profileIds.has(v.id!)
-      return !pendingEmails.has(v.email)
+      const emailMatch = assignedEmails.has(v.email.toLowerCase())
+      const idMatch = v.id !== null && assignedProfileIds.has(v.id)
+      return !emailMatch && !idMatch
     })
   }
 
@@ -225,32 +259,30 @@ export default function RedigeraClient({
         body: JSON.stringify({ task_id: taskId, email }),
       })
       if (res.ok) {
-        setPendingTaskAssignments(prev => [...prev, { task_id: taskId, email }])
+        setPendingTaskAssignments(prev => [...prev, { task_id: taskId, email, name: null }])
         setAddingVolKey('')
       }
     }
   }
 
   async function removeAssignment(taskId: string, volKey: string) {
-    if (volKey.startsWith('p:')) {
-      const profileId = volKey.slice(2)
-      const res = await fetch('/api/admin/assignments', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task_id: taskId, profile_id: profileId }),
-      })
-      if (res.ok) {
+    // Skicka alltid båda identifierarna så att API kan rensa båda källorna
+    const profileId = volKey.startsWith('p:') ? volKey.slice(2) : undefined
+    const email = volKey.startsWith('pending:')
+      ? volKey.slice('pending:'.length)
+      : allVols.find(v => v.key === volKey)?.email.toLowerCase()
+
+    const res = await fetch('/api/admin/assignments', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskId, profile_id: profileId, email }),
+    })
+    if (res.ok) {
+      if (profileId) {
         setAssignments(prev => prev.filter(a => !(a.task_id === taskId && a.profile_id === profileId)))
       }
-    } else if (volKey.startsWith('pending:')) {
-      const email = volKey.slice('pending:'.length)
-      const res = await fetch('/api/admin/assignments', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task_id: taskId, email }),
-      })
-      if (res.ok) {
-        setPendingTaskAssignments(prev => prev.filter(pa => !(pa.task_id === taskId && pa.email === email)))
+      if (email) {
+        setPendingTaskAssignments(prev => prev.filter(pa => !(pa.task_id === taskId && pa.email.toLowerCase() === email)))
       }
     }
   }
@@ -303,7 +335,7 @@ export default function RedigeraClient({
       })
       for (const taskId of (taskIds ?? []) as string[]) {
         if (!pendingTaskAssignments.find(pa => pa.task_id === taskId && pa.email === emailLower)) {
-          setPendingTaskAssignments(prev => [...prev, { task_id: taskId, email: emailLower }])
+          setPendingTaskAssignments(prev => [...prev, { task_id: taskId, email: emailLower, name }])
         }
       }
       setVolSuccess(`${name} har lagts till (inbjudan väntar).`)

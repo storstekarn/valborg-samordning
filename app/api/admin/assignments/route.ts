@@ -55,9 +55,11 @@ export async function DELETE(request: Request) {
 
   const { task_id, profile_id, email } = await request.json()
   if (!task_id) return NextResponse.json({ error: 'task_id krävs' }, { status: 400 })
+  if (!profile_id && !email) return NextResponse.json({ error: 'profile_id eller email krävs' }, { status: 400 })
 
   const supabase = createAdminClient()
 
+  // Radera från task_assignments om profile_id finns
   if (profile_id) {
     const { error } = await supabase
       .from('task_assignments')
@@ -65,22 +67,20 @@ export async function DELETE(request: Request) {
       .eq('task_id', task_id)
       .eq('profile_id', profile_id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  } else if (email) {
-    const normalEmail = (email as string).toLowerCase()
+  }
 
+  // Radera från pending_assignments om email finns (rensar båda källorna)
+  if (email) {
+    const normalEmail = (email as string).toLowerCase()
     const { data: task } = await supabase
       .from('tasks').select('title').eq('id', task_id).single()
-    if (!task) return NextResponse.json({ error: 'Uppgift hittades inte' }, { status: 404 })
-
-    const { error } = await supabase
-      .from('pending_assignments')
-      .delete()
-      .eq('email', normalEmail)
-      .eq('task_title', task.title)
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  } else {
-    return NextResponse.json({ error: 'profile_id eller email krävs' }, { status: 400 })
+    if (task) {
+      await supabase
+        .from('pending_assignments')
+        .delete()
+        .eq('email', normalEmail)
+        .eq('task_title', task.title)
+    }
   }
 
   return NextResponse.json({ ok: true })
