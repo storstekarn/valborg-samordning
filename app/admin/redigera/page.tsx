@@ -29,6 +29,36 @@ export default async function RedigeraPage() {
     email: string; task_title: string; name: string | null; phone: string | null; role: string
   }[]
 
+  // ── DEBUG ──────────────────────────────────────────────────────────────────
+  const debugTask = tasks.find(t => t.title.toLowerCase().includes('eldvakt') && t.title.toLowerCase().includes('sl'))
+  console.log('[DEBUG] tasks.length:', tasks.length)
+  console.log('[DEBUG] profiles.length:', profiles.length)
+  console.log('[DEBUG] assignments.length (task_assignments):', assignments.length)
+  console.log('[DEBUG] pendingRows.length (pending_assignments, ej tomma task_title):', pendingRows.length)
+  console.log('[DEBUG] pendingRes.error:', pendingRes.error)
+
+  if (debugTask) {
+    const taForTask = assignments.filter(a => a.task_id === debugTask.id)
+    const paForTask = pendingRows.filter(r => r.task_title.toLowerCase() === debugTask.title.toLowerCase())
+    const paIlike   = pendingRows.filter(r => r.task_title.toLowerCase().includes('eldvakt'))
+    console.log(`[DEBUG] Uppgift hittad: "${debugTask.title}" (id: ${debugTask.id})`)
+    console.log(`[DEBUG] task_assignments för uppgiften: ${taForTask.length} st`, taForTask)
+    console.log(`[DEBUG] pending_assignments exakt title-match: ${paForTask.length} st`, paForTask)
+    console.log(`[DEBUG] pending_assignments ILIKE eldvakt: ${paIlike.length} st`, paIlike.slice(0, 5))
+  } else {
+    console.log('[DEBUG] Uppgift "Eldvakt - släcka elden" hittades INTE i tasks-listan')
+    console.log('[DEBUG] Uppgiftstitlar i databasen:', tasks.map(t => t.title))
+  }
+
+  // Kör en separat query med ILIKE för att kontrollera kolumnerna
+  const { data: ilikeRows, error: ilikeError } = await supabase
+    .from('pending_assignments')
+    .select('*')
+    .ilike('task_title', '%eldvakt%')
+    .limit(5)
+  console.log('[DEBUG] ILIKE-query pending_assignments (task_title ILIKE %eldvakt%):', ilikeRows, '| error:', ilikeError)
+  // ── /DEBUG ─────────────────────────────────────────────────────────────────
+
   const profileByEmail = new Map(profiles.map(p => [p.email.toLowerCase(), p]))
   const profileById   = new Map(profiles.map(p => [p.id, p]))
   const taskTitleToId = new Map(tasks.map(t => [t.title.toLowerCase(), t.id]))
