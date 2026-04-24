@@ -15,14 +15,13 @@ export async function POST() {
 
   const supabase = createAdminClient()
 
-  // Hämta unika e-poster från pending_assignments
-  const { data: rows } = await supabase
-    .from('pending_assignments')
-    .select('email')
+  // Hämta alla i invite_queue som inte fått inbjudan än
+  const { data: queued } = await supabase
+    .from('invite_queue')
+    .select('email, name')
+    .is('sent_at', null)
 
-  const emails = [...new Set((rows ?? []).map((r: { email: string }) => r.email.toLowerCase()))]
-
-  if (emails.length === 0) {
+  if (!queued || queued.length === 0) {
     return NextResponse.json({ sent: 0, errors: 0 })
   }
 
@@ -31,8 +30,9 @@ export async function POST() {
 
   let sent = 0
   let errors = 0
+  const sentEmails: string[] = []
 
-  for (const email of emails) {
+  for (const { email, name } of queued) {
     try {
       const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
         type: 'magiclink',
@@ -52,7 +52,7 @@ export async function POST() {
         to: email,
         subject: 'Inbjudan: Valborg Infra 2026',
         html: `
-          <h2>Hej!</h2>
+          <h2>Hej${name ? ` ${name}` : ''}!</h2>
           <p>Du är inbjuden att använda samordningsappen för Valborgsmässoafton 2026.</p>
           <p>Klicka på länken nedan för att logga in:</p>
           <p><a href="${linkData.properties.action_link}" style="background:#f59e0b;color:#000;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block">
@@ -62,10 +62,19 @@ export async function POST() {
         `,
       })
 
+      sentEmails.push(email)
       sent++
     } catch {
       errors++
     }
+  }
+
+  // Markera skickade som sent
+  if (sentEmails.length > 0) {
+    await supabase
+      .from('invite_queue')
+      .update({ sent_at: new Date().toISOString() })
+      .in('email', sentEmails)
   }
 
   return NextResponse.json({ sent, errors })

@@ -13,6 +13,13 @@ export interface Profile {
   role: UserRole
 }
 
+export interface PendingVolEntry {
+  email: string
+  name: string | null
+  phone: string | null
+  role: UserRole
+}
+
 export interface Task {
   id: string
   title: string

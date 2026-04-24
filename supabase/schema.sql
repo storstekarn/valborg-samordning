@@ -70,6 +70,14 @@ create table if not exists pending_assignments (
   primary key (email, task_title)
 );
 
+-- Inbjudningskö: vilka som ska/har fått magic link via admin
+create table if not exists invite_queue (
+  email      text primary key,
+  name       text,
+  created_at timestamptz default now(),
+  sent_at    timestamptz
+);
+
 -- ------------------------------------------------------------
 -- ROW LEVEL SECURITY
 -- ------------------------------------------------------------
@@ -80,6 +88,7 @@ alter table task_assignments  enable row level security;
 alter table incidents         enable row level security;
 alter table messages          enable row level security;
 alter table pending_assignments enable row level security;
+alter table invite_queue       enable row level security;
 
 -- Profiles: alla kan läsa
 create policy "profiles_select" on profiles

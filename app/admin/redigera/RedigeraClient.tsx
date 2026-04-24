@@ -2,17 +2,35 @@
 
 import { useState, useMemo } from 'react'
 import { sortTasks } from '@/lib/sortTasks'
-import type { Task, Profile, EventDate, UserRole } from '@/lib/types'
+import type { Task, Profile, PendingVolEntry, EventDate, UserRole } from '@/lib/types'
 
 interface Assignment {
   task_id: string
   profile_id: string
 }
 
+interface PendingAssignment {
+  task_id: string
+  email: string
+}
+
+// Enhetlig volontärpost – inloggad (profil) eller väntande (pending)
+type VEntry = {
+  key: string       // "p:{uuid}" eller "pending:{email}"
+  id: string | null // profile UUID om inloggad, annars null
+  email: string
+  name: string | null
+  phone: string | null
+  role: UserRole
+  loggedIn: boolean
+}
+
 interface Props {
   initialTasks: Task[]
   initialProfiles: Profile[]
   initialAssignments: Assignment[]
+  initialPendingVols: PendingVolEntry[]
+  initialPendingTaskAssignments: PendingAssignment[]
 }
 
 type Tab = 'uppgifter' | 'volontarer' | 'ny-uppgift'
@@ -27,11 +45,19 @@ const DATE_ORDER: EventDate[] = ['fore', 'valborg', '1maj']
 
 const INPUT = 'w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500'
 
-export default function RedigeraClient({ initialTasks, initialProfiles, initialAssignments }: Props) {
+export default function RedigeraClient({
+  initialTasks,
+  initialProfiles,
+  initialAssignments,
+  initialPendingVols,
+  initialPendingTaskAssignments,
+}: Props) {
   const [tab, setTab] = useState<Tab>('uppgifter')
   const [tasks, setTasks] = useState(initialTasks)
   const [profiles, setProfiles] = useState(initialProfiles)
   const [assignments, setAssignments] = useState(initialAssignments)
+  const [pendingVols, setPendingVols] = useState(initialPendingVols)
+  const [pendingTaskAssignments, setPendingTaskAssignments] = useState(initialPendingTaskAssignments)
 
   // ─── Task editing ────────────────────────────────────────────────────────────
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
@@ -39,7 +65,7 @@ export default function RedigeraClient({ initialTasks, initialProfiles, initialA
   const [taskSaving, setTaskSaving] = useState(false)
   const [taskError, setTaskError] = useState<string | null>(null)
   const [taskSaved, setTaskSaved] = useState(false)
-  const [addingProfileId, setAddingProfileId] = useState('')
+  const [addingVolKey, setAddingVolKey] = useState('')
 
   // ─── Volunteer form ──────────────────────────────────────────────────────────
   const [showVolForm, setShowVolForm] = useState(false)
@@ -69,25 +95,62 @@ export default function RedigeraClient({ initialTasks, initialProfiles, initialA
     return map
   }, [tasks])
 
+  // Enhetlig lista: inloggade + väntande
+  const allVols = useMemo<VEntry[]>(() => [
+    ...profiles.map(p => ({
+      key: `p:${p.id}`,
+      id: p.id,
+      email: p.email,
+      name: p.name,
+      phone: p.phone,
+      role: p.role,
+      loggedIn: true,
+    })),
+    ...pendingVols.map(pv => ({
+      key: `pending:${pv.email}`,
+      id: null,
+      email: pv.email,
+      name: pv.name,
+      phone: pv.phone,
+      role: pv.role,
+      loggedIn: false,
+    })),
+  ], [profiles, pendingVols])
+
   // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-  function assigneesFor(taskId: string): Profile[] {
-    return assignments
-      .filter(a => a.task_id === taskId)
-      .map(a => profiles.find(p => p.id === a.profile_id))
-      .filter((p): p is Profile => Boolean(p))
+  function assigneesFor(taskId: string): VEntry[] {
+    const profileKeys = new Set(
+      assignments.filter(a => a.task_id === taskId).map(a => `p:${a.profile_id}`)
+    )
+    const pendingKeys = new Set(
+      pendingTaskAssignments.filter(pa => pa.task_id === taskId).map(pa => `pending:${pa.email}`)
+    )
+    return allVols.filter(v => profileKeys.has(v.key) || pendingKeys.has(v.key))
   }
 
-  function tasksFor(profileId: string): Task[] {
-    return assignments
-      .filter(a => a.profile_id === profileId)
-      .map(a => tasks.find(t => t.id === a.task_id))
+  function tasksFor(volKey: string): Task[] {
+    if (volKey.startsWith('p:')) {
+      const profileId = volKey.slice(2)
+      return assignments
+        .filter(a => a.profile_id === profileId)
+        .map(a => tasks.find(t => t.id === a.task_id))
+        .filter((t): t is Task => Boolean(t))
+    }
+    const email = volKey.slice('pending:'.length)
+    return pendingTaskAssignments
+      .filter(pa => pa.email === email)
+      .map(pa => tasks.find(t => t.id === pa.task_id))
       .filter((t): t is Task => Boolean(t))
   }
 
-  function unassignedFor(taskId: string): Profile[] {
-    const assigned = new Set(assignments.filter(a => a.task_id === taskId).map(a => a.profile_id))
-    return profiles.filter(p => !assigned.has(p.id))
+  function unassignedFor(taskId: string): VEntry[] {
+    const profileIds = new Set(assignments.filter(a => a.task_id === taskId).map(a => a.profile_id))
+    const pendingEmails = new Set(pendingTaskAssignments.filter(pa => pa.task_id === taskId).map(pa => pa.email))
+    return allVols.filter(v => {
+      if (v.loggedIn) return !profileIds.has(v.id!)
+      return !pendingEmails.has(v.email)
+    })
   }
 
   // ─── Task editing ────────────────────────────────────────────────────────────
@@ -97,14 +160,14 @@ export default function RedigeraClient({ initialTasks, initialProfiles, initialA
       setSelectedTaskId(null)
       setEditForm({})
       setTaskError(null)
-      setAddingProfileId('')
+      setAddingVolKey('')
       return
     }
     setSelectedTaskId(task.id)
     setEditForm({ ...task })
     setTaskError(null)
     setTaskSaved(false)
-    setAddingProfileId('')
+    setAddingVolKey('')
   }
 
   async function saveTask() {
@@ -141,27 +204,54 @@ export default function RedigeraClient({ initialTasks, initialProfiles, initialA
 
   // ─── Assignment management ───────────────────────────────────────────────────
 
-  async function addAssignment(taskId: string, profileId: string) {
-    if (!profileId) return
-    const res = await fetch('/api/admin/assignments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task_id: taskId, profile_id: profileId }),
-    })
-    if (res.ok) {
-      setAssignments(prev => [...prev, { task_id: taskId, profile_id: profileId }])
-      setAddingProfileId('')
+  async function addAssignment(taskId: string, volKey: string) {
+    if (!volKey) return
+    if (volKey.startsWith('p:')) {
+      const profileId = volKey.slice(2)
+      const res = await fetch('/api/admin/assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: taskId, profile_id: profileId }),
+      })
+      if (res.ok) {
+        setAssignments(prev => [...prev, { task_id: taskId, profile_id: profileId }])
+        setAddingVolKey('')
+      }
+    } else if (volKey.startsWith('pending:')) {
+      const email = volKey.slice('pending:'.length)
+      const res = await fetch('/api/admin/assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: taskId, email }),
+      })
+      if (res.ok) {
+        setPendingTaskAssignments(prev => [...prev, { task_id: taskId, email }])
+        setAddingVolKey('')
+      }
     }
   }
 
-  async function removeAssignment(taskId: string, profileId: string) {
-    const res = await fetch('/api/admin/assignments', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task_id: taskId, profile_id: profileId }),
-    })
-    if (res.ok) {
-      setAssignments(prev => prev.filter(a => !(a.task_id === taskId && a.profile_id === profileId)))
+  async function removeAssignment(taskId: string, volKey: string) {
+    if (volKey.startsWith('p:')) {
+      const profileId = volKey.slice(2)
+      const res = await fetch('/api/admin/assignments', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: taskId, profile_id: profileId }),
+      })
+      if (res.ok) {
+        setAssignments(prev => prev.filter(a => !(a.task_id === taskId && a.profile_id === profileId)))
+      }
+    } else if (volKey.startsWith('pending:')) {
+      const email = volKey.slice('pending:'.length)
+      const res = await fetch('/api/admin/assignments', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: taskId, email }),
+      })
+      if (res.ok) {
+        setPendingTaskAssignments(prev => prev.filter(pa => !(pa.task_id === taskId && pa.email === email)))
+      }
     }
   }
 
@@ -183,21 +273,44 @@ export default function RedigeraClient({ initialTasks, initialProfiles, initialA
       setVolError(d.error || 'Fel vid skapande')
       return
     }
-    const { profile_id, profile } = await res.json()
-    setProfiles(prev => {
-      const exists = prev.find(p => p.id === profile_id)
-      return exists
-        ? prev.map(p => p.id === profile_id ? { ...p, ...profile } : p)
-        : [...prev, profile]
-    })
-    for (const taskId of volForm.taskIds) {
-      if (!assignments.find(a => a.task_id === taskId && a.profile_id === profile_id)) {
-        setAssignments(prev => [...prev, { task_id: taskId, profile_id }])
+    const data = await res.json()
+
+    if (data.type === 'profile') {
+      // Inloggad användare – uppdatera profiles + assignments
+      const { profile_id, profile } = data
+      setProfiles(prev => {
+        const exists = prev.find(p => p.id === profile_id)
+        return exists
+          ? prev.map(p => p.id === profile_id ? { ...p, ...profile } : p)
+          : [...prev, profile]
+      })
+      for (const taskId of volForm.taskIds) {
+        if (!assignments.find(a => a.task_id === taskId && a.profile_id === profile_id)) {
+          setAssignments(prev => [...prev, { task_id: taskId, profile_id }])
+        }
       }
+      setVolSuccess(`${data.profile.name} har uppdaterats.`)
+    } else {
+      // Ny pending-volontär
+      const { email, name, phone, role, taskIds } = data
+      const emailLower = email.toLowerCase()
+      setPendingVols(prev => {
+        const exists = prev.find(pv => pv.email === emailLower)
+        const entry: PendingVolEntry = { email: emailLower, name, phone, role }
+        return exists
+          ? prev.map(pv => pv.email === emailLower ? entry : pv)
+          : [...prev, entry]
+      })
+      for (const taskId of (taskIds ?? []) as string[]) {
+        if (!pendingTaskAssignments.find(pa => pa.task_id === taskId && pa.email === emailLower)) {
+          setPendingTaskAssignments(prev => [...prev, { task_id: taskId, email: emailLower }])
+        }
+      }
+      setVolSuccess(`${name} har lagts till (inbjudan väntar).`)
     }
+
     setVolForm({ name: '', email: '', phone: '', role: 'volunteer', taskIds: [] })
     setShowVolForm(false)
-    setVolSuccess(`${profile.name} har lagts till.`)
   }
 
   // ─── New task ────────────────────────────────────────────────────────────────
@@ -240,7 +353,7 @@ export default function RedigeraClient({ initialTasks, initialProfiles, initialA
             }`}
           >
             {t === 'uppgifter' && `Uppgifter (${tasks.length})`}
-            {t === 'volontarer' && `Volontärer (${profiles.length})`}
+            {t === 'volontarer' && `Volontärer (${profiles.length + pendingVols.length})`}
             {t === 'ny-uppgift' && 'Ny uppgift'}
           </button>
         ))}
@@ -339,11 +452,14 @@ export default function RedigeraClient({ initialTasks, initialProfiles, initialA
                             <div>
                               <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Tilldelade</p>
                               <div className="flex flex-wrap gap-2 mb-2">
-                                {assignees.map(p => (
-                                  <span key={p.id} className="flex items-center gap-1 text-xs bg-zinc-800 border border-zinc-700 text-zinc-300 px-2.5 py-1 rounded-lg">
-                                    {p.name ?? p.email}
+                                {assignees.map(v => (
+                                  <span key={v.key} className="flex items-center gap-1 text-xs bg-zinc-800 border border-zinc-700 text-zinc-300 px-2.5 py-1 rounded-lg">
+                                    {v.name ?? v.email}
+                                    {!v.loggedIn && (
+                                      <span className="text-zinc-600 text-[10px] ml-0.5">(ej inloggad)</span>
+                                    )}
                                     <button
-                                      onClick={() => removeAssignment(task.id, p.id)}
+                                      onClick={() => removeAssignment(task.id, v.key)}
                                       className="text-zinc-500 hover:text-red-400 transition-colors ml-0.5 leading-none"
                                       title="Ta bort tilldelning"
                                     >
@@ -358,18 +474,20 @@ export default function RedigeraClient({ initialTasks, initialProfiles, initialA
                               {unassigned.length > 0 && (
                                 <div className="flex items-center gap-2">
                                   <select
-                                    value={addingProfileId}
-                                    onChange={e => setAddingProfileId(e.target.value)}
+                                    value={addingVolKey}
+                                    onChange={e => setAddingVolKey(e.target.value)}
                                     className="flex-1 bg-zinc-800 border border-zinc-700 text-zinc-300 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
                                   >
                                     <option value="">Lägg till volontär…</option>
-                                    {unassigned.map(p => (
-                                      <option key={p.id} value={p.id}>{p.name ?? p.email}</option>
+                                    {unassigned.map(v => (
+                                      <option key={v.key} value={v.key}>
+                                        {v.name ?? v.email}{!v.loggedIn ? ' (ej inloggad)' : ''}
+                                      </option>
                                     ))}
                                   </select>
                                   <button
-                                    onClick={() => addAssignment(task.id, addingProfileId)}
-                                    disabled={!addingProfileId}
+                                    onClick={() => addAssignment(task.id, addingVolKey)}
+                                    disabled={!addingVolKey}
                                     className="text-xs font-medium px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-200 disabled:opacity-40 transition-colors"
                                   >
                                     Lägg till
@@ -474,37 +592,46 @@ export default function RedigeraClient({ initialTasks, initialProfiles, initialA
             )}
           </div>
 
-          {/* Volunteer list */}
+          {/* Volunteer list – alla, inloggade och väntande */}
           <div className="space-y-2">
-            {profiles.length === 0 && (
+            {allVols.length === 0 && (
               <p className="text-sm text-zinc-600 bg-zinc-900 border border-zinc-800 rounded-xl p-4">
                 Inga volontärer registrerade ännu.
               </p>
             )}
-            {profiles.map(profile => {
-              const ptasks = tasksFor(profile.id)
+            {allVols.map(vol => {
+              const vtasks = tasksFor(vol.key)
               return (
-                <div key={profile.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+                <div key={vol.key} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-zinc-100 truncate">{profile.name ?? '(inget namn)'}</p>
-                      <p className="text-xs text-zinc-500">{profile.email}</p>
-                      {profile.phone && <p className="text-xs text-zinc-600">{profile.phone}</p>}
+                      <p className="text-sm font-medium text-zinc-100 truncate">{vol.name ?? '(inget namn)'}</p>
+                      <p className="text-xs text-zinc-500">{vol.email}</p>
+                      {vol.phone && <p className="text-xs text-zinc-600">{vol.phone}</p>}
                     </div>
-                    <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full border ${
-                      profile.role === 'admin'
-                        ? 'bg-amber-500/20 border-amber-700 text-amber-300'
-                        : 'bg-zinc-800 border-zinc-700 text-zinc-500'
-                    }`}>
-                      {profile.role === 'admin' ? 'Admin' : 'Volontär'}
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                        vol.loggedIn
+                          ? 'bg-green-500/15 border-green-700 text-green-400'
+                          : 'bg-zinc-800 border-zinc-700 text-zinc-500'
+                      }`}>
+                        {vol.loggedIn ? 'Inloggad' : 'Ej inloggad'}
+                      </span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                        vol.role === 'admin'
+                          ? 'bg-amber-500/20 border-amber-700 text-amber-300'
+                          : 'bg-zinc-800 border-zinc-700 text-zinc-500'
+                      }`}>
+                        {vol.role === 'admin' ? 'Admin' : 'Volontär'}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {ptasks.map(t => (
+                    {vtasks.map(t => (
                       <span key={t.id} className="flex items-center gap-1 text-xs bg-zinc-800 border border-zinc-700 text-zinc-400 px-2.5 py-1 rounded-lg">
                         {t.title}
                         <button
-                          onClick={() => removeAssignment(t.id, profile.id)}
+                          onClick={() => removeAssignment(t.id, vol.key)}
                           className="text-zinc-600 hover:text-red-400 transition-colors leading-none"
                           title="Ta bort uppgiftstilldelning"
                         >
@@ -512,7 +639,7 @@ export default function RedigeraClient({ initialTasks, initialProfiles, initialA
                         </button>
                       </span>
                     ))}
-                    {ptasks.length === 0 && (
+                    {vtasks.length === 0 && (
                       <span className="text-xs text-zinc-600">Inga uppgifter tilldelade</span>
                     )}
                   </div>

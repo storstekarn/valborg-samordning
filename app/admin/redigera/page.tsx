@@ -4,7 +4,7 @@ import { getAdminSession } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sortTasks } from '@/lib/sortTasks'
 import RedigeraClient from './RedigeraClient'
-import type { Task, Profile } from '@/lib/types'
+import type { Task, Profile, PendingVolEntry, UserRole } from '@/lib/types'
 
 export default async function RedigeraPage() {
   const session = await getAdminSession()
@@ -12,15 +12,55 @@ export default async function RedigeraPage() {
 
   const supabase = createAdminClient()
 
-  const [tasksRes, profilesRes, assignmentsRes] = await Promise.all([
+  const [tasksRes, profilesRes, assignmentsRes, pendingRes] = await Promise.all([
     supabase.from('tasks').select('*'),
     supabase.from('profiles').select('*').order('name'),
     supabase.from('task_assignments').select('task_id, profile_id'),
+    supabase.from('pending_assignments').select('email, task_title, name, phone, role'),
   ])
 
   const tasks = sortTasks((tasksRes.data as Task[]) ?? [])
   const profiles = (profilesRes.data as Profile[]) ?? []
   const assignments = (assignmentsRes.data ?? []) as { task_id: string; profile_id: string }[]
+  const pendingRows = (pendingRes.data ?? []) as { email: string; task_title: string; name: string | null; phone: string | null; role: string }[]
+
+  // Unika e-poster som redan är inloggade (har en profil)
+  const profileEmails = new Set(profiles.map(p => p.email.toLowerCase()))
+
+  // Bygg upp karta: task title (lowercase) → task id
+  const taskTitleMap = new Map(tasks.map(t => [t.title.toLowerCase(), t.id]))
+
+  // Pending-volontärer: unika per e-post, inte i profiles
+  const pendingVolMap = new Map<string, PendingVolEntry>()
+  for (const row of pendingRows) {
+    const email = row.email.toLowerCase()
+    if (!profileEmails.has(email) && !pendingVolMap.has(email)) {
+      pendingVolMap.set(email, {
+        email,
+        name: row.name ?? null,
+        phone: row.phone ?? null,
+        role: (row.role as UserRole) ?? 'volunteer',
+      })
+    }
+  }
+  const pendingVols = Array.from(pendingVolMap.values())
+
+  // Pending-tilldelningar: task_id-baserade (för pending-volontärer)
+  const pendingTaskAssignments: { task_id: string; email: string }[] = []
+  const seen = new Set<string>()
+  for (const row of pendingRows) {
+    const email = row.email.toLowerCase()
+    if (!profileEmails.has(email) && row.task_title) {
+      const taskId = taskTitleMap.get(row.task_title.toLowerCase())
+      if (taskId) {
+        const key = `${taskId}:${email}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          pendingTaskAssignments.push({ task_id: taskId, email })
+        }
+      }
+    }
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -41,6 +81,8 @@ export default async function RedigeraPage() {
           initialTasks={tasks}
           initialProfiles={profiles}
           initialAssignments={assignments}
+          initialPendingVols={pendingVols}
+          initialPendingTaskAssignments={pendingTaskAssignments}
         />
       </main>
     </div>

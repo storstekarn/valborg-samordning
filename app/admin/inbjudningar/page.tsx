@@ -5,13 +5,14 @@ import AdminSendInvites from '../AdminSendInvites'
 export default async function AdminInbjudningarPage() {
   const supabase = createAdminClient()
 
-  const { data: rows } = await supabase
-    .from('pending_assignments')
-    .select('email')
+  const { data: queueRows } = await supabase
+    .from('invite_queue')
+    .select('email, name, sent_at')
+    .order('created_at', { ascending: true })
 
-  const recipientCount = new Set(
-    (rows ?? []).map((r: { email: string }) => r.email.toLowerCase())
-  ).size
+  const rows = queueRows ?? []
+  const pending = rows.filter(r => !r.sent_at) as { email: string; name: string | null }[]
+  const sentCount = rows.filter(r => r.sent_at).length
 
   async function handleLogout() {
     'use server'
@@ -32,7 +33,7 @@ export default async function AdminInbjudningarPage() {
             </Link>
             <div>
               <h1 className="text-base font-bold text-amber-400">Skicka inbjudningar</h1>
-              <p className="text-xs text-zinc-500">{recipientCount} mottagare i pending_assignments</p>
+              <p className="text-xs text-zinc-500">{pending.length} väntande · {sentCount} skickade</p>
             </div>
           </div>
           <form action={handleLogout}>
@@ -42,7 +43,11 @@ export default async function AdminInbjudningarPage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-6">
-        <AdminSendInvites recipientCount={recipientCount} />
+        <AdminSendInvites
+          pendingCount={pending.length}
+          sentCount={sentCount}
+          pendingInvites={pending}
+        />
       </main>
     </div>
   )
