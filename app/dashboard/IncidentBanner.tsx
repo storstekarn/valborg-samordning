@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { playIncidentSound, showNotification } from '@/lib/notifications'
 import type { Incident, IncidentCategory } from '@/lib/types'
 
 const CATEGORY_LABELS: Record<IncidentCategory, string> = {
@@ -32,6 +33,13 @@ export default function IncidentBanner({ initialIncidents }: Props) {
               if (prev.some(x => x.id === inc.id)) return prev
               return [inc, ...prev]
             })
+            if (inc.status === 'ny') {
+              playIncidentSound()
+              showNotification(
+                `🚨 Ny incident: ${CATEGORY_LABELS[inc.category]}`,
+                inc.message.slice(0, 100)
+              )
+            }
           }
         }
       )

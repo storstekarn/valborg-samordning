@@ -7,6 +7,7 @@ import IncidentBanner from './IncidentBanner'
 import InstallBanner from './InstallBanner'
 import TaskCard from './TaskCard'
 import { sortTasks } from '@/lib/sortTasks'
+import SoundToggle from '@/components/SoundToggle'
 import type { Task, Incident, Profile, CoAssignee } from '@/lib/types'
 
 const EVENT_DATE_LABELS: Record<string, string> = {
@@ -105,6 +106,7 @@ export default async function DashboardPage() {
             <p className="text-xs text-zinc-500 mt-0.5">{displayName}</p>
           </div>
           <div className="flex items-center gap-2">
+            <SoundToggle />
             <Link href="/incidents/new" className="text-xs bg-red-900/60 hover:bg-red-900 text-red-300 px-2.5 py-1.5 rounded-lg transition-colors">
               Rapportera incident
             </Link>

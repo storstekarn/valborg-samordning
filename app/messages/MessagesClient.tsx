@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { playMessageSound, showNotification } from '@/lib/notifications'
+import SoundToggle from '@/components/SoundToggle'
 import type { Profile, Message } from '@/lib/types'
 
 interface Props {
@@ -151,6 +153,14 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
             .eq('to_id', currentUserId)
           setMessages(prev => prev.map(x => x.id === m.id ? { ...x, read: true } : x))
         }
+        if (m.to_id === currentUserId) {
+          playMessageSound()
+          const senderName = allProfiles.find(p => p.id === m.from_id)?.name ?? 'Okänd'
+          showNotification(
+            `💬 Nytt meddelande från ${senderName}`,
+            m.message.slice(0, 100)
+          )
+        }
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
@@ -201,12 +211,15 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
               )}
             </h1>
           </div>
-          <Link
-            href="/dashboard"
-            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-zinc-100 transition-colors"
-          >
-            ← Tillbaka till dashboard
-          </Link>
+          <div className="flex items-center gap-1">
+            <SoundToggle />
+            <Link
+              href="/dashboard"
+              className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-zinc-100 transition-colors"
+            >
+              ← Tillbaka till dashboard
+            </Link>
+          </div>
         </div>
       </header>
 
