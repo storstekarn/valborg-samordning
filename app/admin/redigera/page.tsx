@@ -18,8 +18,7 @@ export default async function RedigeraPage() {
     supabase.from('task_assignments').select('task_id, profile_id'),
     supabase
       .from('pending_assignments')
-      .select('email, task_title, name, phone')
-      .neq('task_title', ''),
+      .select('email, task_title, name, phone'),
   ])
 
   const tasks = sortTasks((tasksRes.data as Task[]) ?? [])

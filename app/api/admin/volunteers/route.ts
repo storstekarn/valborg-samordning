@@ -47,7 +47,7 @@ export async function POST(request: Request) {
   }
 
   // Inte inloggad – lägg till i pending_assignments (triggern skapar profil vid inloggning)
-  const taskTitleRows: { email: string; task_title: string; name: string; phone: string | null; role: string }[] = []
+  const taskTitleRows: { email: string; task_title: string; name: string; phone: string | null }[] = []
 
   if ((taskIds as string[])?.length > 0) {
     const { data: taskRows } = await supabase
@@ -60,7 +60,6 @@ export async function POST(request: Request) {
         task_title: t.title,
         name: name.trim(),
         phone: phone?.trim() || null,
-        role: normalRole,
       })
     }
   }
@@ -72,7 +71,6 @@ export async function POST(request: Request) {
       task_title: '',
       name: name.trim(),
       phone: phone?.trim() || null,
-      role: normalRole,
     })
   }
 

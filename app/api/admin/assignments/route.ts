@@ -23,10 +23,10 @@ export async function POST(request: Request) {
       .from('tasks').select('title').eq('id', task_id).single()
     if (!task) return NextResponse.json({ error: 'Uppgift hittades inte' }, { status: 404 })
 
-    // Hämta befintlig volontärinfo för att bevara name/phone/role
+    // Hämta befintlig volontärinfo för att bevara name/phone
     const { data: existing } = await supabase
       .from('pending_assignments')
-      .select('name, phone, role')
+      .select('name, phone')
       .eq('email', normalEmail)
       .limit(1)
       .maybeSingle()
@@ -38,7 +38,6 @@ export async function POST(request: Request) {
         task_title: task.title,
         name: existing?.name ?? null,
         phone: existing?.phone ?? null,
-        role: existing?.role ?? 'volunteer',
       }, { onConflict: 'email,task_title' })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
