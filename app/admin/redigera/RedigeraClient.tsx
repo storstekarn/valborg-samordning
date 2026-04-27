@@ -35,6 +35,8 @@ export default function RedigeraClient({ initialTasks, initialAllVols, initialAs
   const [taskError, setTaskError] = useState<string | null>(null)
   const [taskSaved, setTaskSaved] = useState(false)
   const [addingVolKey, setAddingVolKey] = useState('')
+  const [confirmDeleteTaskId, setConfirmDeleteTaskId] = useState<string | null>(null)
+  const [taskDeleting, setTaskDeleting] = useState(false)
 
   // ─── Volunteer form ──────────────────────────────────────────────────────────
   const [showVolForm, setShowVolForm] = useState(false)
@@ -134,6 +136,22 @@ export default function RedigeraClient({ initialTasks, initialAllVols, initialAs
     setTasks(prev => sortTasks(prev.map(t => t.id === selectedTaskId ? { ...t, ...update } : t)))
     setTaskSaved(true)
     setTimeout(() => setTaskSaved(false), 2000)
+  }
+
+  async function deleteTask(taskId: string) {
+    if (taskDeleting) return
+    setTaskDeleting(true)
+    const res = await fetch(`/api/admin/tasks/${taskId}`, { method: 'DELETE' })
+    setTaskDeleting(false)
+    if (!res.ok) return
+    setTasks(prev => prev.filter(t => t.id !== taskId))
+    setAssigneesPerTask(prev => {
+      const next = { ...prev }
+      delete next[taskId]
+      return next
+    })
+    setSelectedTaskId(null)
+    setConfirmDeleteTaskId(null)
   }
 
   // ─── Assignment management ───────────────────────────────────────────────────
@@ -437,13 +455,43 @@ export default function RedigeraClient({ initialTasks, initialAllVols, initialAs
                               <p className="text-xs text-red-400 bg-red-950/40 border border-red-900 rounded-lg px-3 py-2">{taskError}</p>
                             )}
 
-                            <button
-                              onClick={saveTask}
-                              disabled={taskSaving}
-                              className="text-xs font-medium px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-40 transition-colors"
-                            >
-                              {taskSaving ? 'Sparar...' : taskSaved ? 'Sparat ✓' : 'Spara ändringar'}
-                            </button>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                onClick={saveTask}
+                                disabled={taskSaving}
+                                className="text-xs font-medium px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-40 transition-colors"
+                              >
+                                {taskSaving ? 'Sparar...' : taskSaved ? 'Sparat ✓' : 'Spara ändringar'}
+                              </button>
+
+                              {confirmDeleteTaskId === task.id ? (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-xs text-red-400">
+                                    Är du säker? Detta tar bort uppgiften &quot;{task.title}&quot; och alla tilldelningar kopplade till den.
+                                  </span>
+                                  <button
+                                    onClick={() => deleteTask(task.id)}
+                                    disabled={taskDeleting}
+                                    className="text-xs font-medium px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-600 text-white disabled:opacity-40 transition-colors"
+                                  >
+                                    {taskDeleting ? 'Raderar...' : 'Ja, radera'}
+                                  </button>
+                                  <button
+                                    onClick={() => setConfirmDeleteTaskId(null)}
+                                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
+                                  >
+                                    Avbryt
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setConfirmDeleteTaskId(task.id)}
+                                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-red-900 text-red-400 hover:bg-red-950/40 transition-colors"
+                                >
+                                  Radera uppgift
+                                </button>
+                              )}
+                            </div>
 
                             {/* Tilldelade */}
                             <div>

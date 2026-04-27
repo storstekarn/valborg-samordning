@@ -38,3 +38,32 @@ export async function PATCH(
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getAdminSession()
+  if (!session) return NextResponse.json({ error: 'Ej behörig' }, { status: 401 })
+
+  const { id } = await params
+  const supabase = createAdminClient()
+
+  // Hämta task_title för att kunna rensa pending_assignments
+  const { data: task } = await supabase
+    .from('tasks')
+    .select('title')
+    .eq('id', id)
+    .single()
+  if (!task) return NextResponse.json({ error: 'Uppgift hittades inte' }, { status: 404 })
+
+  // Ta bort tilldelningar (task_assignments och pending_assignments)
+  await supabase.from('task_assignments').delete().eq('task_id', id)
+  await supabase.from('pending_assignments').delete().eq('task_title', task.title)
+
+  // Ta bort uppgiften
+  const { error } = await supabase.from('tasks').delete().eq('id', id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  return NextResponse.json({ ok: true })
+}
