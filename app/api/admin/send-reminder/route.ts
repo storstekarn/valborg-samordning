@@ -31,7 +31,7 @@ export async function POST(request: Request) {
 
   const resend = new Resend(process.env.RESEND_API_KEY)
   const { error: sendError } = await resend.emails.send({
-    from: process.env.EMAIL_FROM || 'noreply@valborg.app',
+    from: process.env.EMAIL_FROM || 'noreply@synergyminds.se',
     to: normalEmail,
     subject: 'Påminnelse: din inloggningslänk till Valborg Infra 2026',
     html: buildInviteHtml(name ?? null, linkData.properties.action_link),

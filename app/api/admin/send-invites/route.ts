@@ -58,7 +58,7 @@ export async function POST() {
       if (linkError || !linkData.properties?.action_link) { errors++; continue }
 
       const { error: sendError } = await resend.emails.send({
-        from: process.env.EMAIL_FROM || 'noreply@valborg.app',
+        from: process.env.EMAIL_FROM || 'noreply@synergyminds.se',
         to: email,
         subject: 'Du är inbjuden till Valborg Infra 2026 – här är din inloggningslänk',
         html: buildInviteHtml(name, linkData.properties.action_link),

@@ -63,7 +63,7 @@ export async function POST(request: Request) {
       ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i) as string[]
 
       await resend.emails.send({
-        from: process.env.EMAIL_FROM || 'noreply@valborg.app',
+        from: process.env.EMAIL_FROM || 'noreply@synergyminds.se',
         to: recipients,
         subject,
         html,
