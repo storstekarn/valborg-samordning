@@ -3,6 +3,72 @@ import { getAdminSession } from '@/lib/auth'
 import { NextResponse } from 'next/server'
 import type { Profile, UserRole } from '@/lib/types'
 
+export async function PATCH(request: Request) {
+  const session = await getAdminSession()
+  if (!session) return NextResponse.json({ error: 'Ej behörig' }, { status: 401 })
+
+  const { email, name, newEmail, phone } = await request.json()
+  if (!email?.trim()) return NextResponse.json({ error: 'email krävs' }, { status: 400 })
+
+  const oldEmail = (email as string).trim().toLowerCase()
+  const updEmail = newEmail?.trim() ? (newEmail as string).trim().toLowerCase() : oldEmail
+  const supabase = createAdminClient()
+
+  // Uppdatera pending_assignments (alla rader för den e-posten)
+  const { error: pendingErr } = await supabase
+    .from('pending_assignments')
+    .update({ email: updEmail, name: name?.trim() || null, phone: (phone as string | null)?.trim() || null })
+    .eq('email', oldEmail)
+  if (pendingErr) return NextResponse.json({ error: pendingErr.message }, { status: 500 })
+
+  // Uppdatera invite_queue om den finns
+  await supabase
+    .from('invite_queue')
+    .update({ email: updEmail, name: name?.trim() || null })
+    .eq('email', oldEmail)
+
+  // Uppdatera profiles om personen loggat in
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('email', oldEmail)
+    .maybeSingle()
+  if (profile) {
+    await supabase
+      .from('profiles')
+      .update({ name: name?.trim() || null, phone: (phone as string | null)?.trim() || null })
+      .eq('id', profile.id)
+  }
+
+  return NextResponse.json({ ok: true })
+}
+
+export async function DELETE(request: Request) {
+  const session = await getAdminSession()
+  if (!session) return NextResponse.json({ error: 'Ej behörig' }, { status: 401 })
+
+  const { email } = await request.json()
+  if (!email?.trim()) return NextResponse.json({ error: 'email krävs' }, { status: 400 })
+
+  const normalEmail = (email as string).trim().toLowerCase()
+  const supabase = createAdminClient()
+
+  // Ta bort alla pending_assignments (uppgiftstilldelningar + profilrad)
+  const { error: pendingErr } = await supabase
+    .from('pending_assignments')
+    .delete()
+    .eq('email', normalEmail)
+  if (pendingErr) return NextResponse.json({ error: pendingErr.message }, { status: 500 })
+
+  // Ta bort från invite_queue
+  await supabase
+    .from('invite_queue')
+    .delete()
+    .eq('email', normalEmail)
+
+  return NextResponse.json({ ok: true })
+}
+
 export async function POST(request: Request) {
   const session = await getAdminSession()
   if (!session) return NextResponse.json({ error: 'Ej behörig' }, { status: 401 })

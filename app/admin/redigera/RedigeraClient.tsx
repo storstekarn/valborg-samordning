@@ -45,6 +45,14 @@ export default function RedigeraClient({ initialTasks, initialAllVols, initialAs
   const [volError, setVolError] = useState<string | null>(null)
   const [volSuccess, setVolSuccess] = useState<string | null>(null)
 
+  // ─── Volunteer editing (pending) ─────────────────────────────────────────────
+  const [editingVolKey, setEditingVolKey] = useState<string | null>(null)
+  const [volEditForm, setVolEditForm] = useState({ name: '', email: '', phone: '' })
+  const [volEditSaving, setVolEditSaving] = useState(false)
+  const [volEditError, setVolEditError] = useState<string | null>(null)
+  const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null)
+  const [volDeleting, setVolDeleting] = useState(false)
+
   // ─── New task form ───────────────────────────────────────────────────────────
   const [newTaskForm, setNewTaskForm] = useState({
     title: '', area: '', description: '',
@@ -223,6 +231,83 @@ export default function RedigeraClient({ initialTasks, initialAllVols, initialAs
 
     setVolForm({ name: '', email: '', phone: '', role: 'volunteer', taskIds: [] })
     setShowVolForm(false)
+  }
+
+  // ─── Volunteer edit / delete ─────────────────────────────────────────────────
+
+  function toggleVolEdit(vol: VEntry) {
+    if (editingVolKey === vol.key) {
+      setEditingVolKey(null)
+      setVolEditError(null)
+      setConfirmDeleteKey(null)
+      return
+    }
+    setEditingVolKey(vol.key)
+    setVolEditForm({ name: vol.name ?? '', email: vol.email, phone: vol.phone ?? '' })
+    setVolEditError(null)
+    setConfirmDeleteKey(null)
+  }
+
+  async function saveVolEdit(vol: VEntry) {
+    if (volEditSaving) return
+    setVolEditSaving(true)
+    setVolEditError(null)
+    const res = await fetch('/api/admin/volunteers', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: vol.email,
+        name: volEditForm.name.trim(),
+        newEmail: volEditForm.email.trim().toLowerCase(),
+        phone: volEditForm.phone.trim() || null,
+      }),
+    })
+    setVolEditSaving(false)
+    if (!res.ok) {
+      const d = await res.json()
+      setVolEditError(d.error || 'Fel vid sparande')
+      return
+    }
+    const newEmail = volEditForm.email.trim().toLowerCase()
+    const newKey = `pending:${newEmail}`
+    const updatedVol: VEntry = {
+      ...vol,
+      key: newKey,
+      email: newEmail,
+      name: volEditForm.name.trim() || null,
+      phone: volEditForm.phone.trim() || null,
+    }
+    setAllVols(prev => prev.map(v => v.key === vol.key ? updatedVol : v))
+    setAssigneesPerTask(prev => {
+      const next: Record<string, VEntry[]> = {}
+      for (const [taskId, list] of Object.entries(prev)) {
+        next[taskId] = list.map(a => a.key === vol.key ? updatedVol : a)
+      }
+      return next
+    })
+    setEditingVolKey(null)
+  }
+
+  async function deleteVol(vol: VEntry) {
+    if (volDeleting) return
+    setVolDeleting(true)
+    const res = await fetch('/api/admin/volunteers', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: vol.email }),
+    })
+    setVolDeleting(false)
+    if (!res.ok) return
+    setAllVols(prev => prev.filter(v => v.key !== vol.key))
+    setAssigneesPerTask(prev => {
+      const next: Record<string, VEntry[]> = {}
+      for (const [taskId, list] of Object.entries(prev)) {
+        next[taskId] = list.filter(a => a.key !== vol.key)
+      }
+      return next
+    })
+    setConfirmDeleteKey(null)
+    setEditingVolKey(null)
   }
 
   // ─── New task ────────────────────────────────────────────────────────────────
@@ -511,10 +596,18 @@ export default function RedigeraClient({ initialTasks, initialAllVols, initialAs
             )}
             {allVols.map(vol => {
               const vtasks = tasksFor(vol.key)
+              const isEditingThis = editingVolKey === vol.key
+              const isConfirming = confirmDeleteKey === vol.key
               return (
-                <div key={vol.key} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="min-w-0">
+                <div key={vol.key} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+
+                  {/* Card header */}
+                  <div
+                    className={`px-4 py-3 flex items-start justify-between gap-2
+                      ${!vol.loggedIn ? 'cursor-pointer hover:bg-zinc-800/50 transition-colors' : ''}`}
+                    onClick={!vol.loggedIn ? () => toggleVolEdit(vol) : undefined}
+                  >
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-zinc-100 truncate">{vol.name ?? '(inget namn)'}</p>
                       <p className="text-xs text-zinc-500">{vol.email}</p>
                       {vol.phone && <p className="text-xs text-zinc-600">{vol.phone}</p>}
@@ -534,9 +627,95 @@ export default function RedigeraClient({ initialTasks, initialAllVols, initialAs
                       }`}>
                         {vol.role === 'admin' ? 'Admin' : 'Volontär'}
                       </span>
+                      {!vol.loggedIn && (
+                        <span className="text-zinc-600 text-xs ml-0.5">{isEditingThis ? '▲' : '▼'}</span>
+                      )}
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
+
+                  {/* Edit form – only for pending */}
+                  {!vol.loggedIn && isEditingThis && (
+                    <div className="border-t border-zinc-800 p-4 space-y-3 bg-zinc-900/60">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs text-zinc-400 mb-1">Namn</label>
+                          <input
+                            type="text"
+                            value={volEditForm.name}
+                            onChange={e => setVolEditForm(f => ({ ...f, name: e.target.value }))}
+                            className={INPUT}
+                            onClick={e => e.stopPropagation()}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-zinc-400 mb-1">E-post</label>
+                          <input
+                            type="email"
+                            value={volEditForm.email}
+                            onChange={e => setVolEditForm(f => ({ ...f, email: e.target.value }))}
+                            className={INPUT}
+                            onClick={e => e.stopPropagation()}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-zinc-400 mb-1">Telefon</label>
+                          <input
+                            type="tel"
+                            value={volEditForm.phone}
+                            onChange={e => setVolEditForm(f => ({ ...f, phone: e.target.value }))}
+                            placeholder="070-000 00 00"
+                            className={INPUT}
+                            onClick={e => e.stopPropagation()}
+                          />
+                        </div>
+                      </div>
+
+                      {volEditError && (
+                        <p className="text-xs text-red-400 bg-red-950/40 border border-red-900 rounded-lg px-3 py-2">{volEditError}</p>
+                      )}
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={e => { e.stopPropagation(); saveVolEdit(vol) }}
+                          disabled={volEditSaving}
+                          className="text-xs font-medium px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-40 transition-colors"
+                        >
+                          {volEditSaving ? 'Sparar...' : 'Spara'}
+                        </button>
+
+                        {isConfirming ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs text-red-400">
+                              Är du säker? Detta tar bort {vol.name ?? vol.email} från alla uppgifter.
+                            </span>
+                            <button
+                              onClick={e => { e.stopPropagation(); deleteVol(vol) }}
+                              disabled={volDeleting}
+                              className="text-xs font-medium px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-600 text-white disabled:opacity-40 transition-colors"
+                            >
+                              {volDeleting ? 'Raderar...' : 'Ja, radera'}
+                            </button>
+                            <button
+                              onClick={e => { e.stopPropagation(); setConfirmDeleteKey(null) }}
+                              className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
+                            >
+                              Avbryt
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={e => { e.stopPropagation(); setConfirmDeleteKey(vol.key) }}
+                            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-red-900 text-red-400 hover:bg-red-950/40 transition-colors"
+                          >
+                            Radera volontär
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Task chips */}
+                  <div className={`px-4 pb-3 flex flex-wrap gap-1.5 ${(!vol.loggedIn && isEditingThis) ? 'border-t border-zinc-800 pt-3' : 'pt-1'}`}>
                     {vtasks.map(t => (
                       <span key={t.id} className="flex items-center gap-1 text-xs bg-zinc-800 border border-zinc-700 text-zinc-400 px-2.5 py-1 rounded-lg">
                         {t.title}
@@ -553,6 +732,7 @@ export default function RedigeraClient({ initialTasks, initialAllVols, initialAs
                       <span className="text-xs text-zinc-600">Inga uppgifter tilldelade</span>
                     )}
                   </div>
+
                 </div>
               )
             })}
