@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import AdminIncidentRow from './AdminIncidentRow'
 import AdminTaskRow from './AdminTaskRow'
+import VolunteerStatusCard from './VolunteerStatusCard'
 import { sortTasks } from '@/lib/sortTasks'
 import type { Task, Incident, TaskStatus } from '@/lib/types'
 
@@ -28,7 +29,8 @@ export default async function AdminPage() {
     activeIncidentsRes,
     archivedCountRes,
     unreadCountRes,
-    profileCountRes,
+    profilesRes,
+    pendingVolsRes,
   ] = await Promise.all([
     supabase
       .from('tasks')
@@ -51,7 +53,10 @@ export default async function AdminPage() {
       : Promise.resolve({ count: 0 }),
     supabase
       .from('profiles')
-      .select('*', { count: 'exact', head: true }),
+      .select('id, name, email'),
+    adminClient
+      .from('pending_assignments')
+      .select('email, name'),
   ])
 
   const tasks = sortTasks((tasksRes.data as Task[]) ?? [])
@@ -60,7 +65,22 @@ export default async function AdminPage() {
   })[]
   const archivedCount = archivedCountRes.count ?? 0
   const unreadMessages = unreadCountRes.count ?? 0
-  const volunteerCount = profileCountRes.count ?? 0
+
+  // Inloggade: profiler exklusive superadmin
+  const loggedInVols = (profilesRes.data ?? [])
+    .filter(p => p.id !== superadminId)
+    .map(p => ({ name: p.name as string | null, email: p.email as string }))
+
+  // Ej inloggade: distinct e-poster i pending_assignments som saknar profil
+  const loggedInEmails = new Set(loggedInVols.map(v => v.email.toLowerCase()))
+  const pendingMap = new Map<string, string | null>()
+  for (const row of pendingVolsRes.data ?? []) {
+    const email = (row.email as string).toLowerCase()
+    if (!loggedInEmails.has(email) && !pendingMap.has(email)) {
+      pendingMap.set(email, (row.name as string | null) ?? null)
+    }
+  }
+  const notLoggedInVols = [...pendingMap.entries()].map(([email, name]) => ({ email, name }))
 
   const totalTasks = tasks.length
   const klara = tasks.filter((t) => t.status === 'klar').length
@@ -129,11 +149,8 @@ export default async function AdminPage() {
             <p className="text-xs text-amber-400 mt-0.5">→ Öppna</p>
           </Link>
 
-          {/* Volontärer inloggade */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-center">
-            <p className="text-2xl font-bold text-zinc-300">{volunteerCount}</p>
-            <p className="text-xs text-zinc-500 mt-1">Volontärer inloggade</p>
-          </div>
+          {/* Volontärer inloggade – klickbar */}
+          <VolunteerStatusCard loggedIn={loggedInVols} notLoggedIn={notLoggedInVols} />
         </div>
 
         {/* Aktiva incidenter */}
