@@ -13,10 +13,23 @@ export async function PATCH(
     return NextResponse.json({ error: 'Ej inloggad' }, { status: 401 })
   }
 
+  // Profil måste finnas – annars är sessionen skapad men trigger har inte kört än
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (!profile) {
+    return NextResponse.json(
+      { error: 'Din profil är inte klar än, försök logga ut och in igen' },
+      { status: 403 }
+    )
+  }
+
   const { notes } = await request.json() as { notes: string }
 
-  // RLS (tasks_update_assigned_or_admin) enforces that only assigned users
-  // or admins can update. No extra check needed here.
+  // RLS (tasks_update_assigned_or_admin) hanterar auktorisering
   const { error } = await supabase
     .from('tasks')
     .update({ notes: notes?.trim() || null })

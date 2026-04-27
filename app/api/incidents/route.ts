@@ -30,7 +30,14 @@ export async function POST(request: Request) {
     .from('profiles')
     .select('name, email')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
+
+  if (!profile) {
+    return NextResponse.json(
+      { error: 'Din profil är inte klar än, försök logga ut och in igen' },
+      { status: 403 }
+    )
+  }
 
   // Spara incident
   const adminClient = createAdminClient()

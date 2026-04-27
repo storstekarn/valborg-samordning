@@ -22,23 +22,30 @@ export async function PATCH(
     return NextResponse.json({ error: 'Ej inloggad' }, { status: 401 })
   }
 
-  // Kontrollera att användaren är tilldelad uppgiften eller är admin
-  const [assignmentRes, profileRes] = await Promise.all([
-    supabase
-      .from('task_assignments')
-      .select('task_id')
-      .eq('task_id', id)
-      .eq('profile_id', user.id)
-      .single(),
-    supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single(),
-  ])
+  // Profil måste finnas – annars är sessionen skapad men trigger har inte kört än
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
 
-  const isAssigned = !!assignmentRes.data
-  const isAdmin = profileRes.data?.role === 'admin'
+  if (!profile) {
+    return NextResponse.json(
+      { error: 'Din profil är inte klar än, försök logga ut och in igen' },
+      { status: 403 }
+    )
+  }
+
+  // Kontrollera tilldelning (maybeSingle – 0 rader är ok, inte ett fel)
+  const { data: assignment } = await supabase
+    .from('task_assignments')
+    .select('task_id')
+    .eq('task_id', id)
+    .eq('profile_id', user.id)
+    .maybeSingle()
+
+  const isAssigned = !!assignment
+  const isAdmin = profile.role === 'admin'
 
   if (!isAssigned && !isAdmin) {
     return NextResponse.json({ error: 'Ej behörig' }, { status: 403 })

@@ -100,7 +100,9 @@ export default async function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950">
-      <PresenceTracker profileId={user.id} name={profile?.name ?? null} page="/dashboard" />
+      {profile && (
+        <PresenceTracker profileId={user.id} name={profile.name ?? null} page="/dashboard" />
+      )}
       <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
