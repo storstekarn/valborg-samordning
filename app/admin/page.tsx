@@ -31,6 +31,7 @@ export default async function AdminPage() {
     unreadCountRes,
     profilesRes,
     pendingVolsRes,
+    authUsersRes,
   ] = await Promise.all([
     supabase
       .from('tasks')
@@ -57,6 +58,7 @@ export default async function AdminPage() {
     adminClient
       .from('pending_assignments')
       .select('email, name'),
+    adminClient.auth.admin.listUsers({ perPage: 1000 }),
   ])
 
   const tasks = sortTasks((tasksRes.data as Task[]) ?? [])
@@ -66,24 +68,46 @@ export default async function AdminPage() {
   const archivedCount = archivedCountRes.count ?? 0
   const unreadMessages = unreadCountRes.count ?? 0
 
+  // Emails för användare som faktiskt loggat in (last_sign_in_at IS NOT NULL)
+  const signedInEmails = new Set(
+    (authUsersRes.data?.users ?? [])
+      .filter(u => u.last_sign_in_at != null)
+      .map(u => u.email?.toLowerCase())
+      .filter((e): e is string => Boolean(e))
+  )
+
   // Superadmin-namn för Presence
   const superadminName = (profilesRes.data ?? []).find(p => p.id === superadminId)?.name ?? 'Admin'
 
-  // Inloggade: profiler exklusive superadmin
-  const loggedInVols = (profilesRes.data ?? [])
-    .filter(p => p.id !== superadminId)
+  // Alla profiler exklusive superadmin
+  const allProfilesExSuperadmin = (profilesRes.data ?? []).filter(p => p.id !== superadminId)
+
+  // Inloggade: har profil OCH last_sign_in_at IS NOT NULL
+  const loggedInVols = allProfilesExSuperadmin
+    .filter(p => signedInEmails.has((p.email as string).toLowerCase()))
     .map(p => ({ id: p.id as string, name: p.name as string | null, email: p.email as string }))
 
-  // Ej inloggade: distinct e-poster i pending_assignments som saknar profil
-  const loggedInEmails = new Set(loggedInVols.map(v => v.email.toLowerCase()))
+  // Profiler utan faktisk inloggning (skapade av generateLink, aldrig klickat länken)
+  const profilesNotSignedIn = allProfilesExSuperadmin
+    .filter(p => !signedInEmails.has((p.email as string).toLowerCase()))
+
+  // Alla profil-e-poster (för dedup mot pending)
+  const allProfileEmails = new Set((profilesRes.data ?? []).map(p => (p.email as string).toLowerCase()))
+
+  // Pending utan profil alls
   const pendingMap = new Map<string, string | null>()
   for (const row of pendingVolsRes.data ?? []) {
     const email = (row.email as string).toLowerCase()
-    if (!loggedInEmails.has(email) && !pendingMap.has(email)) {
+    if (!allProfileEmails.has(email) && !pendingMap.has(email)) {
       pendingMap.set(email, (row.name as string | null) ?? null)
     }
   }
-  const notLoggedInVols = [...pendingMap.entries()].map(([email, name]) => ({ id: null as null, email, name }))
+
+  // Ej inloggade: profiler utan sign-in + pending helt utan profil
+  const notLoggedInVols = [
+    ...profilesNotSignedIn.map(p => ({ id: p.id as string, name: p.name as string | null, email: p.email as string })),
+    ...[...pendingMap.entries()].map(([email, name]) => ({ id: null as null, email, name })),
+  ]
 
   const totalTasks = tasks.length
   const klara = tasks.filter((t) => t.status === 'klar').length
