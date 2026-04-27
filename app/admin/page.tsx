@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import AdminIncidentRow from './AdminIncidentRow'
 import AdminTaskRow from './AdminTaskRow'
 import VolunteerStatusCard from './VolunteerStatusCard'
+import PresenceTracker from '@/components/PresenceTracker'
 import { sortTasks } from '@/lib/sortTasks'
 import type { Task, Incident, TaskStatus } from '@/lib/types'
 
@@ -66,10 +67,13 @@ export default async function AdminPage() {
   const archivedCount = archivedCountRes.count ?? 0
   const unreadMessages = unreadCountRes.count ?? 0
 
+  // Superadmin-namn för Presence
+  const superadminName = (profilesRes.data ?? []).find(p => p.id === superadminId)?.name ?? 'Admin'
+
   // Inloggade: profiler exklusive superadmin
   const loggedInVols = (profilesRes.data ?? [])
     .filter(p => p.id !== superadminId)
-    .map(p => ({ name: p.name as string | null, email: p.email as string }))
+    .map(p => ({ id: p.id as string, name: p.name as string | null, email: p.email as string }))
 
   // Ej inloggade: distinct e-poster i pending_assignments som saknar profil
   const loggedInEmails = new Set(loggedInVols.map(v => v.email.toLowerCase()))
@@ -80,7 +84,7 @@ export default async function AdminPage() {
       pendingMap.set(email, (row.name as string | null) ?? null)
     }
   }
-  const notLoggedInVols = [...pendingMap.entries()].map(([email, name]) => ({ email, name }))
+  const notLoggedInVols = [...pendingMap.entries()].map(([email, name]) => ({ id: null as null, email, name }))
 
   const totalTasks = tasks.length
   const klara = tasks.filter((t) => t.status === 'klar').length
@@ -98,6 +102,9 @@ export default async function AdminPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950">
+      {superadminId && (
+        <PresenceTracker profileId={superadminId} name={superadminName} page="/admin" />
+      )}
       <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>

@@ -8,6 +8,7 @@ import InstallBanner from './InstallBanner'
 import TaskCard from './TaskCard'
 import { sortTasks } from '@/lib/sortTasks'
 import SoundToggle from '@/components/SoundToggle'
+import PresenceTracker from '@/components/PresenceTracker'
 import type { Task, Incident, Profile, CoAssignee } from '@/lib/types'
 
 const EVENT_DATE_LABELS: Record<string, string> = {
@@ -99,6 +100,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950">
+      <PresenceTracker profileId={user.id} name={profile?.name ?? null} page="/dashboard" />
       <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
