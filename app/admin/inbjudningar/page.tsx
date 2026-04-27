@@ -5,14 +5,40 @@ import AdminSendInvites from '../AdminSendInvites'
 export default async function AdminInbjudningarPage() {
   const supabase = createAdminClient()
 
-  const { data: queueRows } = await supabase
-    .from('invite_queue')
-    .select('email, name, sent_at')
-    .order('created_at', { ascending: true })
+  const [pendingRes, queueRes, profilesRes] = await Promise.all([
+    supabase.from('pending_assignments').select('email, name'),
+    supabase.from('invite_queue').select('email, name, sent_at').order('sent_at', { ascending: false }),
+    supabase.from('profiles').select('email'),
+  ])
 
-  const rows = queueRows ?? []
-  const pending = rows.filter(r => !r.sent_at) as { email: string; name: string | null }[]
-  const sentCount = rows.filter(r => r.sent_at).length
+  // Distinct email → name från pending_assignments (source of truth för vilka som finns)
+  const distinctPending = new Map<string, string | null>()
+  for (const row of pendingRes.data ?? []) {
+    const email = (row.email as string).toLowerCase()
+    if (!distinctPending.has(email)) distinctPending.set(email, row.name ?? null)
+  }
+
+  // Inbjudna: invite_queue med sent_at
+  const sentMap = new Map<string, { name: string | null; sent_at: string }>()
+  for (const row of queueRes.data ?? []) {
+    if (row.sent_at) sentMap.set((row.email as string).toLowerCase(), { name: row.name, sent_at: row.sent_at })
+  }
+
+  // Inloggade
+  const loggedInEmails = new Set((profilesRes.data ?? []).map(p => (p.email as string).toLowerCase()))
+
+  // "Väntar på inbjudan": finns i pending_assignments men EJ i sentMap
+  const pendingInvites = [...distinctPending.entries()]
+    .filter(([email]) => !sentMap.has(email))
+    .map(([email, name]) => ({ email, name }))
+
+  // "Redan inbjudna": finns i sentMap
+  const sentInvites = [...sentMap.entries()].map(([email, { name, sent_at }]) => ({
+    email,
+    name,
+    sent_at,
+    hasLoggedIn: loggedInEmails.has(email),
+  }))
 
   async function handleLogout() {
     'use server'
@@ -33,7 +59,7 @@ export default async function AdminInbjudningarPage() {
             </Link>
             <div>
               <h1 className="text-base font-bold text-amber-400">Skicka inbjudningar</h1>
-              <p className="text-xs text-zinc-500">{pending.length} väntande · {sentCount} skickade</p>
+              <p className="text-xs text-zinc-500">{pendingInvites.length} väntande · {sentInvites.length} skickade</p>
             </div>
           </div>
           <form action={handleLogout}>
@@ -44,9 +70,8 @@ export default async function AdminInbjudningarPage() {
 
       <main className="max-w-4xl mx-auto px-4 py-6">
         <AdminSendInvites
-          pendingCount={pending.length}
-          sentCount={sentCount}
-          pendingInvites={pending}
+          pendingInvites={pendingInvites}
+          sentInvites={sentInvites}
         />
       </main>
     </div>
