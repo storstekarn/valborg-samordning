@@ -4,7 +4,6 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import AdminIncidentRow from './AdminIncidentRow'
 import AdminTaskRow from './AdminTaskRow'
 import VolunteerStatusCard from './VolunteerStatusCard'
-import PresenceTracker from '@/components/PresenceTracker'
 import { sortTasks } from '@/lib/sortTasks'
 import type { Task, Incident, TaskStatus } from '@/lib/types'
 
@@ -102,9 +101,6 @@ export default async function AdminPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950">
-      {superadminId && (
-        <PresenceTracker profileId={superadminId} name={superadminName} page="/admin" />
-      )}
       <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
@@ -157,7 +153,11 @@ export default async function AdminPage() {
           </Link>
 
           {/* Volontärer inloggade – klickbar */}
-          <VolunteerStatusCard loggedIn={loggedInVols} notLoggedIn={notLoggedInVols} />
+          <VolunteerStatusCard
+            loggedIn={loggedInVols}
+            notLoggedIn={notLoggedInVols}
+            trackAs={superadminId ? { profileId: superadminId, name: superadminName } : undefined}
+          />
         </div>
 
         {/* Aktiva incidenter */}

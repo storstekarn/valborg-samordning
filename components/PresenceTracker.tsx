@@ -15,6 +15,9 @@ export default function PresenceTracker({ profileId, name, page }: Props) {
     const supabase = createClient()
     const channel = supabase.channel('online-users')
 
+    // on('presence') måste registreras innan subscribe()
+    channel.on('presence', { event: 'sync' }, () => {})
+
     channel.subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
         await channel.track({ profile_id: profileId, name: name ?? 'Okänd', page })

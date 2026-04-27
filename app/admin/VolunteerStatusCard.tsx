@@ -8,9 +8,10 @@ interface Vol { id: string | null; name: string | null; email: string }
 interface Props {
   loggedIn: Vol[]
   notLoggedIn: Vol[]
+  trackAs?: { profileId: string; name: string | null }
 }
 
-export default function VolunteerStatusCard({ loggedIn, notLoggedIn }: Props) {
+export default function VolunteerStatusCard({ loggedIn, notLoggedIn, trackAs }: Props) {
   const [open, setOpen] = useState(false)
   const [activeIds, setActiveIds] = useState<Set<string>>(new Set())
 
@@ -18,21 +19,33 @@ export default function VolunteerStatusCard({ loggedIn, notLoggedIn }: Props) {
     const supabase = createClient()
     const channel = supabase.channel('online-users')
 
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState<{ profile_id: string }>()
-        const ids = new Set(
-          Object.values(state)
-            .flat()
-            .map(p => p.profile_id)
-            .filter(Boolean)
-        )
-        setActiveIds(ids)
-      })
-      .subscribe()
+    // on('presence') MÅSTE registreras innan subscribe() anropas
+    channel.on('presence', { event: 'sync' }, () => {
+      const state = channel.presenceState<{ profile_id: string }>()
+      const ids = new Set(
+        Object.values(state).flat().map(p => p.profile_id).filter(Boolean)
+      )
+      setActiveIds(ids)
+    })
 
-    return () => { supabase.removeChannel(channel) }
-  }, [])
+    channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED' && trackAs) {
+        await channel.track({
+          profile_id: trackAs.profileId,
+          name: trackAs.name ?? 'Admin',
+          page: '/admin',
+        })
+      }
+    })
+
+    const handleUnload = () => { if (trackAs) channel.untrack() }
+    window.addEventListener('beforeunload', handleUnload)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload)
+      supabase.removeChannel(channel)
+    }
+  }, [trackAs?.profileId, trackAs?.name]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeCount = activeIds.size
 
