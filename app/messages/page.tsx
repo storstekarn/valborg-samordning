@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import MessagesClient from './MessagesClient'
 import type { Profile, Message } from '@/lib/types'
 
@@ -14,8 +15,10 @@ export default async function MessagesPage({
 
   if (!user) redirect('/auth/login')
 
-  // Hämta profiler och meddelanden parallellt
-  const [profilesRes, messagesRes] = await Promise.all([
+  const adminClient = createAdminClient()
+
+  // Hämta profiler, meddelanden och auth-användare parallellt
+  const [profilesRes, messagesRes, authUsersRes] = await Promise.all([
     supabase
       .from('profiles')
       .select('id, name, role, email, phone')
@@ -25,9 +28,19 @@ export default async function MessagesPage({
       .select('*')
       .or(`from_id.eq.${user.id},to_id.eq.${user.id}`)
       .order('created_at', { ascending: true }),
+    adminClient.auth.admin.listUsers({ perPage: 1000 }),
   ])
 
-  const profiles = (profilesRes.data as Profile[]) ?? []
+  // Filtrera till enbart användare som faktiskt har loggat in
+  // (profiles skapas av trigger redan vid generateLink, INNAN inloggning)
+  const signedInIds = new Set(
+    (authUsersRes.data?.users ?? [])
+      .filter(u => u.last_sign_in_at != null)
+      .map(u => u.id)
+  )
+
+  const profiles = ((profilesRes.data as Profile[]) ?? [])
+    .filter(p => signedInIds.has(p.id))
   const messages = (messagesRes.data as Message[]) ?? []
 
   // Räkna ut "samma ansvarsområde" i tre steg
