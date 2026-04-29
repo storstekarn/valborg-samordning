@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
 import AdminIncidentRow from './AdminIncidentRow'
@@ -31,7 +33,7 @@ export default async function AdminPage() {
     profilesRes,
     pendingVolsRes,
   ] = await Promise.all([
-    adminClient.from('tasks').select('*'),
+    adminClient.from('tasks').select('*').order('title'),
     adminClient
       .from('incidents')
       .select('*, profiles(name, phone)')
@@ -53,6 +55,7 @@ export default async function AdminPage() {
   ])
 
   const tasks = sortTasks((tasksRes.data as Task[]) ?? [])
+  console.log('[admin] tasks.status snapshot:', tasks.map(t => ({ id: t.id, title: t.title, status: t.status })))
   const activeIncidents = (activeIncidentsRes.data ?? []) as (Incident & {
     profiles: { name: string; phone: string | null } | null
   })[]
