@@ -94,8 +94,8 @@ export default function AdminSendInvites({ pendingInvites, sentInvites }: Props)
         </div>
 
         <p className="text-sm text-zinc-400">
-          Skickar magic links via Resend till alla som inte fått inbjudan än.
-          Varje person får en personlig inloggningslänk giltig i 24 timmar.
+          Skickar inbjudningsmejl via Resend till alla som inte fått inbjudan än.
+          Mejlet innehåller länken till inloggningssidan – därifrån begär man en engångskod.
         </p>
 
         {sendResult && (
@@ -116,7 +116,7 @@ export default function AdminSendInvites({ pendingInvites, sentInvites }: Props)
             ? 'Skickar...'
             : localPending.length === 0
               ? 'Inga väntande inbjudningar'
-              : `Skicka magic links (${localPending.length} st)`}
+              : `Skicka inbjudningar (${localPending.length} st)`}
         </button>
       </div>
 
