@@ -16,6 +16,59 @@ export default function LoginPage() {
   const [resendCooldown, setResendCooldown] = useState(0)
   const codeInputRef = useRef<HTMLInputElement>(null)
 
+  // Återställ e-post från sessionStorage vid sidladdning
+  useEffect(() => {
+    const saved = sessionStorage.getItem('otp_email')
+    const savedSent = sessionStorage.getItem('otp_sent')
+    if (saved) setEmail(saved)
+    if (savedSent === '1') setCodeSent(true)
+  }, [])
+
+  // Spara e-post i sessionStorage
+  useEffect(() => {
+    if (email) sessionStorage.setItem('otp_email', email)
+  }, [email])
+
+  useEffect(() => {
+    if (codeSent) sessionStorage.setItem('otp_sent', '1')
+    else sessionStorage.removeItem('otp_sent')
+  }, [codeSent])
+
+  // Auto-paste: läs clipboard när sidan får fokus igen
+  useEffect(() => {
+    if (!codeSent) return
+
+    async function tryPaste() {
+      if (!document.hasFocus()) return
+      try {
+        const text = await navigator.clipboard.readText()
+        const digits = text.replace(/\D/g, '')
+        if (digits.length === 8) {
+          setCode(digits)
+          setVerifyError(null)
+        }
+      } catch {
+        // Clipboard-åtkomst nekad – inget att göra
+      }
+    }
+
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') tryPaste()
+    }
+
+    function onFocus() {
+      tryPaste()
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [codeSent])
+
+  // Cooldown-räknare
   useEffect(() => {
     if (resendCooldown <= 0) return
     const t = setTimeout(() => setResendCooldown(c => c - 1), 1000)
@@ -75,8 +128,18 @@ export default function LoginPage() {
     if (error) {
       setVerifyError('Ogiltig eller utgången kod. Försök igen eller skicka en ny kod.')
     } else {
+      sessionStorage.removeItem('otp_email')
+      sessionStorage.removeItem('otp_sent')
       router.push('/dashboard')
     }
+  }
+
+  function handleReset() {
+    setCodeSent(false)
+    setCode('')
+    setVerifyError(null)
+    setSendError(null)
+    sessionStorage.removeItem('otp_sent')
   }
 
   return (
@@ -123,17 +186,24 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Kodfält – visas direkt under när koden skickats */}
+          {/* Kodfält */}
           {codeSent && (
             <form onSubmit={handleVerifyOtp} className="space-y-3 pt-2 border-t border-zinc-800">
+              <p className="text-xs text-zinc-500">
+                En inloggningskod har skickats till{' '}
+                <span className="text-zinc-300 font-medium">{email}</span>.
+              </p>
+
+              {/* Clipboard-instruktion */}
+              <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2.5 leading-relaxed space-y-1.5">
+                <p>📋 Öppna mejlet, kopiera koden och kom tillbaka hit – den klistras in automatiskt.</p>
+                <p className="text-amber-400/70">
+                  På Android: om mejlet öppnas i Gmail-appen, tryck länge på länken och välj
+                  "Öppna i Chrome" eller "Öppna i webbläsaren" – annars kan inte koden klistras in automatiskt.
+                </p>
+              </div>
+
               <div>
-                <p className="text-xs text-zinc-500 mb-3">
-                  En inloggningskod har skickats till{' '}
-                  <span className="text-zinc-300 font-medium">{email}</span>.
-                </p>
-                <p className="text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2 mb-3">
-                  Öppna din mejlapp, kopiera koden och klistra in här.
-                </p>
                 <label htmlFor="code" className="block text-sm font-medium text-zinc-300 mb-1.5">
                   Inloggningskod (8 siffror)
                 </label>
@@ -169,7 +239,7 @@ export default function LoginPage() {
               <div className="flex items-center justify-between pt-1">
                 <button
                   type="button"
-                  onClick={() => { setCodeSent(false); setCode(''); setVerifyError(null); setSendError(null) }}
+                  onClick={handleReset}
                   className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
                 >
                   Fel e-postadress?
@@ -180,7 +250,11 @@ export default function LoginPage() {
                   disabled={sending || resendCooldown > 0}
                   className="text-xs text-zinc-500 hover:text-amber-400 disabled:text-zinc-700 disabled:cursor-not-allowed transition-colors"
                 >
-                  {sending ? 'Skickar...' : resendCooldown > 0 ? `Skicka ny kod (${resendCooldown}s)` : 'Skicka ny kod'}
+                  {sending
+                    ? 'Skickar...'
+                    : resendCooldown > 0
+                      ? `Skicka ny kod (${resendCooldown}s)`
+                      : 'Skicka ny kod'}
                 </button>
               </div>
             </form>
