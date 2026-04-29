@@ -52,9 +52,11 @@ export function buildInviteHtml(name: string | null, _loginUrl: string): string 
                     <p style="margin:0 0 8px;font-size:14px;color:#a1a1aa;line-height:1.6;">
                       <strong style="color:#d4d4d8;">2.</strong> Ange din e-postadress
                     </p>
-                    <p style="margin:0 0 16px;font-size:14px;color:#a1a1aa;line-height:1.6;">
+                    <p style="margin:0 0 8px;font-size:14px;color:#a1a1aa;line-height:1.6;">
                       <strong style="color:#d4d4d8;">3.</strong> Ange inloggningskoden:
-                      <span style="display:inline-block;margin-left:6px;background:#1c1c1f;border:1px solid #3f3f46;border-radius:6px;padding:2px 10px;font-family:monospace;font-size:16px;font-weight:700;color:#f59e0b;letter-spacing:0.15em;">${VOLUNTEER_CODE}</span>
+                    </p>
+                    <p style="margin:0 0 4px;">
+                      <span style="display:inline-block;background:#f59e0b;border-radius:6px;padding:6px 16px;font-family:monospace;font-size:22px;font-weight:900;color:#000000;letter-spacing:0.25em;">${VOLUNTEER_CODE}</span>
                     </p>
                   </td>
                 </tr>
