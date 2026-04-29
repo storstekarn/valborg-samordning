@@ -39,10 +39,13 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
     defaultPartnerId ? 'conversation' : 'list'
   )
   const [showNewMsg, setShowNewMsg] = useState(false)
+  const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'error'>('connecting')
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const newMsgRef = useRef<HTMLSelectElement>(null)
   const selectedUserIdRef = useRef(selectedUserId)
+  const allProfilesRef = useRef(allProfiles)
+  const lastPolledRef = useRef(new Date().toISOString())
 
   // Priority profiles: superadmin + Max
   const MAX_EMAIL = 'max.angervall@gmail.com'
@@ -137,46 +140,99 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Håll ref uppdaterad så broadcast-handler alltid ser senaste vald konversation
+  // Håll refs uppdaterade
   useEffect(() => { selectedUserIdRef.current = selectedUserId }, [selectedUserId])
+  useEffect(() => { allProfilesRef.current = allProfiles }, [allProfiles])
 
-  // Realtime via Broadcast (fungerar utan Supabase-session, kräver inte authenticated role)
+  // Gemensam hanterare för inkommande meddelanden (broadcast + polling)
+  function handleIncoming(m: Message) {
+    if (m.to_id !== currentUserId) return
+    setMessages(prev => {
+      if (prev.some(x => x.id === m.id)) return prev
+      return [...prev, m]
+    })
+    if (m.from_id === selectedUserIdRef.current) {
+      fetch('/api/messages/read', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from_id: m.from_id }),
+      })
+      setMessages(prev => prev.map(x => x.id === m.id ? { ...x, read: true } : x))
+    }
+    playMessageSound()
+    const senderName = allProfilesRef.current.find(p => p.id === m.from_id)?.name ?? 'Okänd'
+    showNotification(`💬 Nytt meddelande från ${senderName}`, m.message.slice(0, 100))
+  }
+
+  // Realtime Broadcast med automatisk återanslutning
   useEffect(() => {
     const supabase = createClient()
-    const channel = supabase
-      .channel('valborg-messages')
-      .on('broadcast', { event: 'new_message' }, ({ payload }) => {
-        const m = payload as Message
-        // Ignorera meddelanden som inte berör denna användare
-        if (m.to_id !== currentUserId && m.from_id !== currentUserId) return
-        // Ignorera egna meddelanden – hanteras av optimistisk uppdatering + ersättning
-        if (m.from_id === currentUserId) return
+    let mounted = true
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
-        setMessages(prev => {
-          if (prev.some(x => x.id === m.id)) return prev
-          return [...prev, m]
+    function connect() {
+      if (!mounted) return
+      setRealtimeStatus('connecting')
+      const channel = supabase
+        .channel(`valborg-messages-${Date.now()}`)
+        .on('broadcast', { event: 'new_message' }, ({ payload }) => {
+          if (payload.from_id !== currentUserId) handleIncoming(payload as Message)
         })
+        .subscribe((status) => {
+          if (!mounted) return
+          if (status === 'SUBSCRIBED') {
+            setRealtimeStatus('connected')
+          } else if (status === 'TIMED_OUT' || status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+            setRealtimeStatus('error')
+            reconnectTimer = setTimeout(connect, 3000)
+          }
+        })
+      return channel
+    }
 
-        // Markera som läst om konversationen är öppen
-        if (m.to_id === currentUserId && m.from_id === selectedUserIdRef.current) {
-          fetch('/api/messages/read', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ from_id: m.from_id }),
-          })
-          setMessages(prev => prev.map(x => x.id === m.id ? { ...x, read: true } : x))
-        }
+    const channel = connect()
 
-        // Notifiering
-        if (m.to_id === currentUserId) {
-          playMessageSound()
-          const senderName = allProfiles.find(p => p.id === m.from_id)?.name ?? 'Okänd'
-          showNotification(`💬 Nytt meddelande från ${senderName}`, m.message.slice(0, 100))
+    return () => {
+      mounted = false
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [currentUserId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Polling fallback – hämtar nya meddelanden var 5:e sekund när sidan är aktiv
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    async function poll() {
+      try {
+        const res = await fetch(`/api/messages?since=${encodeURIComponent(lastPolledRef.current)}`)
+        if (res.ok) {
+          lastPolledRef.current = new Date().toISOString()
+          const { messages: newMsgs } = await res.json()
+          for (const m of newMsgs as Message[]) handleIncoming(m)
         }
-      })
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [currentUserId, allProfiles])
+      } catch { /* ignorera nätverksfel */ }
+      if (document.visibilityState === 'visible') {
+        timer = setTimeout(poll, 5000)
+      }
+    }
+
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        poll()
+      } else {
+        if (timer) { clearTimeout(timer); timer = null }
+      }
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    timer = setTimeout(poll, 5000)
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      if (timer) clearTimeout(timer)
+    }
+  }, [currentUserId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -250,15 +306,23 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
                 ← Tillbaka
               </button>
             )}
-            <h1 className="text-base font-bold text-zinc-100">
+            <h1 className="text-base font-bold text-zinc-100 flex items-center gap-2">
               {mobileView === 'conversation' && selectedProfile
                 ? displayName(selectedProfile)
                 : 'Meddelanden'}
               {totalUnread > 0 && mobileView === 'list' && (
-                <span className="ml-2 text-xs bg-red-500 text-white rounded-full px-1.5 py-0.5 font-bold">
+                <span className="text-xs bg-red-500 text-white rounded-full px-1.5 py-0.5 font-bold">
                   {totalUnread}
                 </span>
               )}
+              <span
+                title={realtimeStatus === 'connected' ? 'Realtid aktiv' : realtimeStatus === 'connecting' ? 'Ansluter...' : 'Realtid inaktiv – polling aktiv'}
+                className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${
+                  realtimeStatus === 'connected' ? 'bg-green-500' :
+                  realtimeStatus === 'connecting' ? 'bg-amber-400 animate-pulse' :
+                  'bg-red-500'
+                }`}
+              />
             </h1>
           </div>
           <div className="flex items-center gap-1">
