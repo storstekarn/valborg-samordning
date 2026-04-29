@@ -34,6 +34,7 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
   const [selectedUserId, setSelectedUserId] = useState<string | null>(defaultPartnerId ?? null)
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
   const [mobileView, setMobileView] = useState<'list' | 'conversation'>(
     defaultPartnerId ? 'conversation' : 'list'
   )
@@ -176,13 +177,15 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
     e.preventDefault()
     if (!selectedUserId || !newMessage.trim() || sending) return
     setSending(true)
+    setNewMessage('')
     await fetch('/api/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ to_id: selectedUserId, message: newMessage.trim() }),
     })
     setSending(false)
-    setNewMessage('')
+    setSent(true)
+    setTimeout(() => setSent(false), 2000)
   }
 
   const totalUnread = Object.values(unreadByPartner).reduce((s, n) => s + n, 0)
@@ -398,9 +401,10 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
                 <button
                   type="submit"
                   disabled={!newMessage.trim() || sending}
-                  className="shrink-0 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white font-medium px-4 py-2.5 rounded-xl text-sm transition-colors"
+                  style={{ minHeight: '44px' }}
+                  className="shrink-0 min-w-[72px] bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white font-semibold px-4 rounded-xl text-sm transition-colors"
                 >
-                  Skicka
+                  {sending ? '…' : sent ? '✓ Skickat' : 'Skicka'}
                 </button>
               </form>
             </>
