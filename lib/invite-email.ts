@@ -1,4 +1,5 @@
 const LOGIN_URL = 'https://valborg-samordning-production.up.railway.app/auth/login'
+const LOGIN_URL_DISPLAY = 'valborg-samordning-production.up.railway.app/auth/login'
 
 export function buildInviteHtml(name: string | null, _loginUrl: string): string {
   const greeting = name ? `Hej ${name}!` : 'Hej!'
@@ -43,14 +44,25 @@ export function buildInviteHtml(name: string | null, _loginUrl: string): string 
                 för alla. Vi har nu bytt till en enklare metod: du loggar in med en
                 engångskod som skickas till din e-post.
               </p>
-              <p style="margin:0 0 32px;font-size:15px;color:#a1a1aa;line-height:1.65;">
-                Gå till <a href="${LOGIN_URL}" style="color:#f59e0b;text-decoration:none;">${LOGIN_URL}</a>,
-                skriv in din e-postadress och klicka på "Skicka kod" – då får du en
-                engångskod via e-post som du skriver in för att logga in.
+              <p style="margin:0 0 24px;font-size:15px;color:#a1a1aa;line-height:1.65;">
+                Tryck på knappen nedan, skriv in din e-postadress och klicka på "Skicka kod"
+                – då får du en engångskod via e-post som du skriver in för att logga in.
               </p>
 
+              <!-- Platform instructions -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;background:#1c1c1f;border:1px solid #27272a;border-radius:10px;">
+                <tr>
+                  <td style="padding:14px 16px;">
+                    <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#71717a;text-transform:uppercase;letter-spacing:0.06em;">Öppna länken i din webbläsare</p>
+                    <p style="margin:0 0 6px;font-size:13px;color:#a1a1aa;line-height:1.5;">📱 <strong style="color:#d4d4d8;">iPhone:</strong> Tryck länge på knappen → välj "Öppna i Safari"</p>
+                    <p style="margin:0 0 6px;font-size:13px;color:#a1a1aa;line-height:1.5;">🤖 <strong style="color:#d4d4d8;">Android:</strong> Tryck länge på knappen → välj "Öppna i Chrome"</p>
+                    <p style="margin:0;font-size:13px;color:#a1a1aa;line-height:1.5;">💻 <strong style="color:#d4d4d8;">Dator:</strong> Klicka på knappen som vanligt</p>
+                  </td>
+                </tr>
+              </table>
+
               <!-- CTA button -->
-              <table cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
+              <table cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
                 <tr>
                   <td style="border-radius:10px;background:#d97706;">
                     <a href="${LOGIN_URL}"
@@ -61,24 +73,12 @@ export function buildInviteHtml(name: string | null, _loginUrl: string): string 
                 </tr>
               </table>
 
-              <!-- Platform instructions -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;background:#1c1c1f;border:1px solid #27272a;border-radius:10px;">
-                <tr>
-                  <td style="padding:14px 16px;">
-                    <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#71717a;text-transform:uppercase;letter-spacing:0.06em;">Fungerar inte knappen?</p>
-                    <p style="margin:0 0 6px;font-size:13px;color:#a1a1aa;line-height:1.5;">📱 <strong style="color:#d4d4d8;">iPhone:</strong> Tryck länge på knappen → välj "Öppna i Safari"</p>
-                    <p style="margin:0 0 6px;font-size:13px;color:#a1a1aa;line-height:1.5;">🤖 <strong style="color:#d4d4d8;">Android:</strong> Tryck länge på knappen → välj "Öppna i Chrome"</p>
-                    <p style="margin:0;font-size:13px;color:#a1a1aa;line-height:1.5;">💻 <strong style="color:#d4d4d8;">Dator:</strong> Klicka på knappen som vanligt</p>
-                  </td>
-                </tr>
-              </table>
-
               <!-- Manual URL fallback -->
               <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
                 <tr>
                   <td style="padding:12px 16px;background:#111113;border:1px solid #27272a;border-radius:10px;">
-                    <p style="margin:0 0 4px;font-size:12px;color:#52525b;">Eller kopiera denna adress till din webbläsare:</p>
-                    <a href="${LOGIN_URL}" style="font-size:12px;color:#f59e0b;text-decoration:none;word-break:break-all;font-family:monospace;">${LOGIN_URL}</a>
+                    <p style="margin:0 0 4px;font-size:12px;color:#52525b;">Kopiera manuellt till din webbläsare:</p>
+                    <span style="font-size:12px;color:#a1a1aa;word-break:break-all;font-family:monospace;">${LOGIN_URL_DISPLAY}</span>
                   </td>
                 </tr>
               </table>
