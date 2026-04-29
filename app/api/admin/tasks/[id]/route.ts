@@ -34,6 +34,7 @@ export async function PATCH(
     }
     update.status = body.status
   }
+  if (body.notes !== undefined) update.notes = body.notes?.trim() || null
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: 'Inget att uppdatera' }, { status: 400 })
