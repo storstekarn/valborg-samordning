@@ -14,22 +14,7 @@ export default function LoginPage() {
   const [sendError, setSendError] = useState<string | null>(null)
   const [verifyError, setVerifyError] = useState<string | null>(null)
   const [resendCooldown, setResendCooldown] = useState(0)
-  const [sessionChecking, setSessionChecking] = useState(true)
   const codeInputRef = useRef<HTMLInputElement>(null)
-
-  // Redirecta till /dashboard om användaren redan är inloggad.
-  // Använder getUser() (nätverksvalidering) istället för getSession() (läser bara
-  // localStorage) för att undvika redirect-loop när servern och klienten är osynkade.
-  useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        router.replace('/dashboard')
-      } else {
-        setSessionChecking(false)
-      }
-    })
-  }, [router])
 
   // Återställ e-post från sessionStorage vid sidladdning
   useEffect(() => {
@@ -155,14 +140,6 @@ export default function LoginPage() {
     setVerifyError(null)
     setSendError(null)
     sessionStorage.removeItem('otp_sent')
-  }
-
-  if (sessionChecking) {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-zinc-700 border-t-amber-400 rounded-full animate-spin" />
-      </div>
-    )
   }
 
   return (
