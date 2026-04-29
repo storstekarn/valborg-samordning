@@ -36,9 +36,15 @@ export function buildInviteHtml(name: string | null, loginUrl: string): string {
                 Du är tilldelad uppgifter på valborgsmässoafton och kan följa körschema,
                 rapportera incidenter och kommunicera med driftledningen via appen.
               </p>
+              <p style="margin:0 0 16px;font-size:15px;color:#a1a1aa;line-height:1.65;">
+                Vi har uppdaterat inloggningsmetoden sedan tidigare. Tidigare skickades en
+                inloggningslänk, men eftersom det uppstod problem för vissa användare loggar
+                man nu in med en engångskod istället.
+              </p>
               <p style="margin:0 0 32px;font-size:15px;color:#a1a1aa;line-height:1.65;">
-                Gå till <a href="${loginUrl}" style="color:#f59e0b;text-decoration:none;">${loginUrl}</a>
-                och ange din inloggningskod när du får den via e-post – inga lösenord behövs.
+                Gå till <a href="${loginUrl}" style="color:#f59e0b;text-decoration:none;">${loginUrl}</a>,
+                skriv in din e-postadress och klicka på "Skicka kod" – då får du en
+                engångskod via e-post som du skriver in för att logga in.
               </p>
 
               <!-- CTA button -->
@@ -62,7 +68,7 @@ export function buildInviteHtml(name: string | null, loginUrl: string): string {
 
               <!-- Footer note -->
               <p style="margin:0;font-size:12px;color:#52525b;line-height:1.6;">
-                När du klickar på knappen skickas en inloggningskod till din e-post.<br />
+                Knappen tar dig till inloggningssidan där du begär din engångskod.<br />
                 Vid frågor, kontakta Patrik eller Max.
               </p>
 
