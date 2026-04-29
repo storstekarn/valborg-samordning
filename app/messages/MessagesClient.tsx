@@ -177,15 +177,36 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
     e.preventDefault()
     if (!selectedUserId || !newMessage.trim() || sending) return
     setSending(true)
+
+    const text = newMessage.trim()
     setNewMessage('')
-    await fetch('/api/messages', {
+
+    // Optimistisk uppdatering – visa meddelandet direkt utan att vänta på servern
+    const optimisticMsg: Message = {
+      id: `optimistic-${Date.now()}`,
+      from_id: currentUserId,
+      to_id: selectedUserId,
+      message: text,
+      read: true,
+      created_at: new Date().toISOString(),
+    }
+    setMessages(prev => [...prev, optimisticMsg])
+
+    const res = await fetch('/api/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to_id: selectedUserId, message: newMessage.trim() }),
+      body: JSON.stringify({ to_id: selectedUserId, message: text }),
     })
+
     setSending(false)
-    setSent(true)
-    setTimeout(() => setSent(false), 2000)
+
+    if (res.ok) {
+      setSent(true)
+      setTimeout(() => setSent(false), 2000)
+    } else {
+      // Ta bort optimistiska meddelandet om det misslyckades
+      setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
+    }
   }
 
   const totalUnread = Object.values(unreadByPartner).reduce((s, n) => s + n, 0)
