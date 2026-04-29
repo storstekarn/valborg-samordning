@@ -44,6 +44,7 @@ export default function AdminTaskRow({ task }: Props) {
   const [loadingStatus, setLoadingStatus] = useState(false)
   const [savingNotes, setSavingNotes] = useState(false)
   const [notesSaved, setNotesSaved] = useState(false)
+  const [notesError, setNotesError] = useState<string | null>(null)
 
   useEffect(() => { setStatus(task.status) }, [task.status])
   useEffect(() => { setNotes(task.notes ?? '') }, [task.notes])
@@ -63,14 +64,20 @@ export default function AdminTaskRow({ task }: Props) {
   async function saveNotes() {
     setSavingNotes(true)
     setNotesSaved(false)
-    await fetch(`/api/admin/tasks/${task.id}`, {
+    setNotesError(null)
+    const res = await fetch(`/api/admin/tasks/${task.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ notes }),
     })
     setSavingNotes(false)
-    setNotesSaved(true)
-    setTimeout(() => setNotesSaved(false), 2000)
+    if (res.ok) {
+      setNotesSaved(true)
+      setTimeout(() => setNotesSaved(false), 2000)
+    } else {
+      const data = await res.json().catch(() => ({}))
+      setNotesError(data.error ?? `Fel ${res.status} – kontrollera Railway-loggarna`)
+    }
   }
 
   return (
@@ -135,6 +142,7 @@ export default function AdminTaskRow({ task }: Props) {
               {savingNotes ? 'Sparar...' : 'Spara'}
             </button>
             {notesSaved && <span className="text-xs text-green-400">Sparat!</span>}
+            {notesError && <span className="text-xs text-red-400">{notesError}</span>}
           </div>
         </div>
       )}

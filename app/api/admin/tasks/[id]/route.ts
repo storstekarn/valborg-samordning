@@ -40,10 +40,17 @@ export async function PATCH(
     return NextResponse.json({ error: 'Inget att uppdatera' }, { status: 400 })
   }
 
+  console.log(`[admin/tasks PATCH] id=${id} update=`, update)
+
   const supabase = createAdminClient()
   const { error } = await supabase.from('tasks').update(update).eq('id', id)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error(`[admin/tasks PATCH] Supabase-fel:`, error.message)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  console.log(`[admin/tasks PATCH] OK, id=${id}`)
   return NextResponse.json({ ok: true })
 }
 
