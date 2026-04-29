@@ -1,4 +1,6 @@
-export function buildInviteHtml(name: string | null, loginUrl: string): string {
+const LOGIN_URL = 'https://valborg-samordning-production.up.railway.app/auth/login'
+
+export function buildInviteHtml(name: string | null, _loginUrl: string): string {
   const greeting = name ? `Hej ${name}!` : 'Hej!'
   return `<!DOCTYPE html>
 <html lang="sv">
@@ -42,7 +44,7 @@ export function buildInviteHtml(name: string | null, loginUrl: string): string {
                 man nu in med en engångskod istället.
               </p>
               <p style="margin:0 0 32px;font-size:15px;color:#a1a1aa;line-height:1.65;">
-                Gå till <a href="${loginUrl}" style="color:#f59e0b;text-decoration:none;">${loginUrl}</a>,
+                Gå till <a href="${LOGIN_URL}" style="color:#f59e0b;text-decoration:none;">${LOGIN_URL}</a>,
                 skriv in din e-postadress och klicka på "Skicka kod" – då får du en
                 engångskod via e-post som du skriver in för att logga in.
               </p>
@@ -51,7 +53,7 @@ export function buildInviteHtml(name: string | null, loginUrl: string): string {
               <table cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
                 <tr>
                   <td style="border-radius:10px;background:#d97706;">
-                    <a href="${loginUrl}"
+                    <a href="${LOGIN_URL}"
                        style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:700;color:#09090b;text-decoration:none;border-radius:10px;letter-spacing:0.01em;">
                       Gå till Valborg Infra 2026
                     </a>
