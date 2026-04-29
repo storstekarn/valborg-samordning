@@ -68,7 +68,7 @@ export default function LoginPage() {
               onChange={e => setCode(e.target.value)}
               required
               autoComplete="one-time-code"
-              placeholder="112233"
+              placeholder="······"
               className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2.5 text-sm placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent tracking-widest text-center font-mono text-lg"
             />
           </div>
