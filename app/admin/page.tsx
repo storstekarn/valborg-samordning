@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { createServiceClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import AdminIncidentRow from './AdminIncidentRow'
 import AdminTaskRow from './AdminTaskRow'
@@ -20,7 +19,6 @@ const STATUS_STYLES: Record<TaskStatus, string> = {
 }
 
 export default async function AdminPage() {
-  const supabase = await createServiceClient()
   const adminClient = createAdminClient()
   const superadminId = process.env.SUPERADMIN_PROFILE_ID ?? ''
 
@@ -31,17 +29,14 @@ export default async function AdminPage() {
     unreadCountRes,
     profilesRes,
     pendingVolsRes,
-    authUsersRes,
   ] = await Promise.all([
-    supabase
-      .from('tasks')
-      .select('*'),
-    supabase
+    adminClient.from('tasks').select('*'),
+    adminClient
       .from('incidents')
       .select('*, profiles(name, phone)')
       .in('status', ['ny', 'hanteras'])
       .order('created_at', { ascending: false }),
-    supabase
+    adminClient
       .from('incidents')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'löst'),
@@ -52,13 +47,8 @@ export default async function AdminPage() {
           .eq('to_id', superadminId)
           .eq('read', false)
       : Promise.resolve({ count: 0 }),
-    supabase
-      .from('profiles')
-      .select('id, name, email'),
-    adminClient
-      .from('pending_assignments')
-      .select('email, name'),
-    adminClient.auth.admin.listUsers({ perPage: 1000 }),
+    adminClient.from('profiles').select('id, name, email'),
+    adminClient.from('pending_assignments').select('email, name'),
   ])
 
   const tasks = sortTasks((tasksRes.data as Task[]) ?? [])
@@ -68,46 +58,31 @@ export default async function AdminPage() {
   const archivedCount = archivedCountRes.count ?? 0
   const unreadMessages = unreadCountRes.count ?? 0
 
-  // Emails för användare som faktiskt loggat in (last_sign_in_at IS NOT NULL)
-  const signedInEmails = new Set(
-    (authUsersRes.data?.users ?? [])
-      .filter(u => u.last_sign_in_at != null)
-      .map(u => u.email?.toLowerCase())
-      .filter((e): e is string => Boolean(e))
-  )
-
-  // Superadmin-namn för Presence
   const superadminName = (profilesRes.data ?? []).find(p => p.id === superadminId)?.name ?? 'Admin'
 
-  // Alla profiler exklusive superadmin
+  // Alla profiler exklusive superadmin = inloggade (profil skapas vid första lyckade inloggning)
   const allProfilesExSuperadmin = (profilesRes.data ?? []).filter(p => p.id !== superadminId)
+  const allProfileEmails = new Set(allProfilesExSuperadmin.map(p => (p.email as string).toLowerCase()))
 
-  // Inloggade: har profil OCH last_sign_in_at IS NOT NULL
-  const loggedInVols = allProfilesExSuperadmin
-    .filter(p => signedInEmails.has((p.email as string).toLowerCase()))
-    .map(p => ({ id: p.id as string, name: p.name as string | null, email: p.email as string }))
+  const loggedInVols = allProfilesExSuperadmin.map(p => ({
+    id: p.id as string,
+    name: p.name as string | null,
+    email: p.email as string,
+  }))
 
-  // Profiler utan faktisk inloggning (skapade av generateLink, aldrig klickat länken)
-  const profilesNotSignedIn = allProfilesExSuperadmin
-    .filter(p => !signedInEmails.has((p.email as string).toLowerCase()))
-
-  // Alla profil-e-poster (för dedup mot pending)
-  const allProfileEmails = new Set((profilesRes.data ?? []).map(p => (p.email as string).toLowerCase()))
-
-  // Pending utan profil alls
-  const pendingMap = new Map<string, string | null>()
+  // Ej inloggade: finns i pending_assignments men saknar profil
+  const notLoggedInMap = new Map<string, string | null>()
   for (const row of pendingVolsRes.data ?? []) {
     const email = (row.email as string).toLowerCase()
-    if (!allProfileEmails.has(email) && !pendingMap.has(email)) {
-      pendingMap.set(email, (row.name as string | null) ?? null)
+    if (!allProfileEmails.has(email) && !notLoggedInMap.has(email)) {
+      notLoggedInMap.set(email, (row.name as string | null) ?? null)
     }
   }
-
-  // Ej inloggade: profiler utan sign-in + pending helt utan profil
-  const notLoggedInVols = [
-    ...profilesNotSignedIn.map(p => ({ id: p.id as string, name: p.name as string | null, email: p.email as string })),
-    ...[...pendingMap.entries()].map(([email, name]) => ({ id: null as null, email, name })),
-  ]
+  const notLoggedInVols = [...notLoggedInMap.entries()].map(([email, name]) => ({
+    id: null as null,
+    email,
+    name,
+  }))
 
   const totalTasks = tasks.length
   const klara = tasks.filter((t) => t.status === 'klar').length
@@ -143,14 +118,12 @@ export default async function AdminPage() {
 
         {/* Statistik */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {/* Uppgifter */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-center">
             <p className="text-2xl font-bold text-green-400">{klara}/{totalTasks}</p>
             <p className="text-xs text-zinc-500 mt-1">Uppgifter klara</p>
             {pagar > 0 && <p className="text-xs text-amber-400 mt-0.5">{pagar} pågår</p>}
           </div>
 
-          {/* Aktiva incidenter */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-center">
             <p className={`text-2xl font-bold ${nyaIncidenter > 0 ? 'text-red-400' : 'text-zinc-300'}`}>
               {activeIncidents.length}
@@ -161,7 +134,6 @@ export default async function AdminPage() {
             )}
           </div>
 
-          {/* Olästa meddelanden — klickbar */}
           <Link
             href="/admin/meddelanden"
             className={`rounded-xl p-4 text-center transition-colors block
@@ -176,7 +148,6 @@ export default async function AdminPage() {
             <p className="text-xs text-amber-400 mt-0.5">→ Öppna</p>
           </Link>
 
-          {/* Volontärer inloggade – klickbar */}
           <VolunteerStatusCard
             loggedIn={loggedInVols}
             notLoggedIn={notLoggedInVols}
@@ -211,10 +182,7 @@ export default async function AdminPage() {
             </div>
           )}
           <div className="mt-2">
-            <Link
-              href="/admin/incidenter/arkiv"
-              className="text-xs text-zinc-500 hover:text-zinc-300"
-            >
+            <Link href="/admin/incidenter/arkiv" className="text-xs text-zinc-500 hover:text-zinc-300">
               Visa arkiv ({archivedCount} lösta) →
             </Link>
           </div>
@@ -262,7 +230,7 @@ export default async function AdminPage() {
           >
             <div>
               <p className="text-sm font-medium text-zinc-200">Skicka inbjudningar</p>
-              <p className="text-xs text-zinc-500 mt-0.5">Magic links via e-post till volontärer</p>
+              <p className="text-xs text-zinc-500 mt-0.5">Inbjudningsmejl med inloggningsinstruktioner</p>
             </div>
             <span className="text-zinc-600 text-sm">→</span>
           </Link>
