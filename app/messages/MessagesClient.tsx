@@ -42,6 +42,7 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const newMsgRef = useRef<HTMLSelectElement>(null)
+  const selectedUserIdRef = useRef(selectedUserId)
 
   // Priority profiles: superadmin + Max
   const MAX_EMAIL = 'max.angervall@gmail.com'
@@ -136,19 +137,28 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Realtime
+  // Håll ref uppdaterad så broadcast-handler alltid ser senaste vald konversation
+  useEffect(() => { selectedUserIdRef.current = selectedUserId }, [selectedUserId])
+
+  // Realtime via Broadcast (fungerar utan Supabase-session, kräver inte authenticated role)
   useEffect(() => {
     const supabase = createClient()
     const channel = supabase
-      .channel('messages:mine')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-        const m = payload.new as Message
-        if (m.from_id !== currentUserId && m.to_id !== currentUserId) return
+      .channel('valborg-messages')
+      .on('broadcast', { event: 'new_message' }, ({ payload }) => {
+        const m = payload as Message
+        // Ignorera meddelanden som inte berör denna användare
+        if (m.to_id !== currentUserId && m.from_id !== currentUserId) return
+        // Ignorera egna meddelanden – hanteras av optimistisk uppdatering + ersättning
+        if (m.from_id === currentUserId) return
+
         setMessages(prev => {
           if (prev.some(x => x.id === m.id)) return prev
           return [...prev, m]
         })
-        if (m.to_id === currentUserId && m.from_id === selectedUserId) {
+
+        // Markera som läst om konversationen är öppen
+        if (m.to_id === currentUserId && m.from_id === selectedUserIdRef.current) {
           fetch('/api/messages/read', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
@@ -156,18 +166,17 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
           })
           setMessages(prev => prev.map(x => x.id === m.id ? { ...x, read: true } : x))
         }
+
+        // Notifiering
         if (m.to_id === currentUserId) {
           playMessageSound()
           const senderName = allProfiles.find(p => p.id === m.from_id)?.name ?? 'Okänd'
-          showNotification(
-            `💬 Nytt meddelande från ${senderName}`,
-            m.message.slice(0, 100)
-          )
+          showNotification(`💬 Nytt meddelande från ${senderName}`, m.message.slice(0, 100))
         }
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [currentUserId, selectedUserId])
+  }, [currentUserId, allProfiles])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -201,10 +210,26 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
     setSending(false)
 
     if (res.ok) {
+      const { message: realMsg } = await res.json()
+
+      // Ersätt optimistiskt meddelande med den verkliga DB-raden (riktigt id + created_at)
+      if (realMsg) {
+        setMessages(prev => prev.map(m => m.id === optimisticMsg.id ? realMsg : m))
+
+        // Sänd broadcast så mottagaren ser meddelandet direkt utan reload
+        const supabase = createClient()
+        const bc = supabase.channel('valborg-messages')
+        bc.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            bc.send({ type: 'broadcast', event: 'new_message', payload: realMsg })
+              .finally(() => supabase.removeChannel(bc))
+          }
+        })
+      }
+
       setSent(true)
       setTimeout(() => setSent(false), 2000)
     } else {
-      // Ta bort optimistiska meddelandet om det misslyckades
       setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
     }
   }

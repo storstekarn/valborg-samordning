@@ -12,12 +12,12 @@ export async function POST(request: Request) {
   }
 
   const adminClient = createAdminClient()
-  const { error } = await adminClient.from('messages').insert({
-    from_id: session.profileId,
-    to_id,
-    message: message.trim(),
-  })
+  const { data: inserted, error } = await adminClient
+    .from('messages')
+    .insert({ from_id: session.profileId, to_id, message: message.trim() })
+    .select()
+    .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true, message: inserted })
 }

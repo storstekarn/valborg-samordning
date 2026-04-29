@@ -9,6 +9,7 @@ import TaskCard from './TaskCard'
 import { sortTasks } from '@/lib/sortTasks'
 import SoundToggle from '@/components/SoundToggle'
 import PresenceTracker from '@/components/PresenceTracker'
+import MessagesBadge from './MessagesBadge'
 import type { Task, Incident, Profile, CoAssignee } from '@/lib/types'
 
 const EVENT_DATE_LABELS: Record<string, string> = {
@@ -23,7 +24,7 @@ export default async function DashboardPage() {
 
   const supabase = createAdminClient()
 
-  const [profileRes, assignmentsRes, incidentsRes] = await Promise.all([
+  const [profileRes, assignmentsRes, incidentsRes, unreadRes] = await Promise.all([
     supabase.from('profiles').select('*').eq('id', session.profileId).single(),
     supabase.from('task_assignments').select('task_id').eq('profile_id', session.profileId),
     supabase
@@ -31,11 +32,17 @@ export default async function DashboardPage() {
       .select('id, category, message, status, admin_comment, created_at, reported_by')
       .in('status', ['ny', 'hanteras'])
       .order('created_at', { ascending: false }),
+    supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('to_id', session.profileId)
+      .eq('read', false),
   ])
 
   const profile = profileRes.data
   const taskIds = (assignmentsRes.data ?? []).map((a: { task_id: string }) => a.task_id)
   const activeIncidents = (incidentsRes.data as Incident[]) ?? []
+  const unreadMessages = unreadRes.count ?? 0
 
   let tasks: Task[] = []
   let coAssigneeMap: Record<string, CoAssignee[]> = {}
@@ -111,9 +118,7 @@ export default async function DashboardPage() {
             <Link href="/incidents/new" className="text-xs bg-red-900/60 hover:bg-red-900 text-red-300 px-2.5 py-1.5 rounded-lg transition-colors">
               Rapportera incident
             </Link>
-            <Link href="/messages" className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-2.5 py-1.5 rounded-lg transition-colors">
-              Meddelanden
-            </Link>
+            <MessagesBadge profileId={session.profileId} initialUnread={unreadMessages} />
             <form action={handleLogout}>
               <button type="submit" className="text-xs text-zinc-500 hover:text-zinc-300 px-2 py-1.5 rounded-lg transition-colors">
                 Logga ut
