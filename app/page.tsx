@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import TaskBoard from '@/components/TaskBoard'
 import { sortTasks } from '@/lib/sortTasks'
 import type { Task } from '@/lib/types'
@@ -7,7 +7,7 @@ import type { Task } from '@/lib/types'
 export const revalidate = 0
 
 export default async function HomePage() {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   const { data } = await supabase
     .from('tasks')

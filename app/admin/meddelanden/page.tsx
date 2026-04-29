@@ -1,26 +1,24 @@
 import Link from 'next/link'
-import { createServiceClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import AdminConversations from '../AdminConversations'
 import type { Profile, Message } from '@/lib/types'
 
 export default async function AdminMeddelandenPage() {
-  const supabase = await createServiceClient()
   const adminClient = createAdminClient()
   const superadminId = process.env.SUPERADMIN_PROFILE_ID ?? ''
 
   const [profilesRes, superadminMessagesRes, allMessagesRes] = await Promise.all([
-    supabase.from('profiles').select('id, name, email, role, phone').order('name'),
+    adminClient.from('profiles').select('id, name, email, role, phone').order('name'),
     superadminId
       ? adminClient.from('messages').select('*')
           .or(`from_id.eq.${superadminId},to_id.eq.${superadminId}`)
           .order('created_at', { ascending: true })
       : Promise.resolve({ data: [] }),
-    supabase
+    adminClient
       .from('messages')
       .select('*, from_profile:profiles!from_id(name), to_profile:profiles!to_id(name)')
       .order('created_at', { ascending: false })
-      .limit(30),
+      .limit(50),
   ])
 
   const profiles = (profilesRes.data as Profile[]) ?? []

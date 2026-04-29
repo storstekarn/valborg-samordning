@@ -1,10 +1,10 @@
 import Link from 'next/link'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import AdminIncidentRow from '../../AdminIncidentRow'
 import type { Incident } from '@/lib/types'
 
 export default async function AdminArkivPage() {
-  const supabase = await createServiceClient()
+  const supabase = createAdminClient()
 
   const { data } = await supabase
     .from('incidents')
