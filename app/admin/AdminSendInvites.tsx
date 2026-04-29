@@ -44,6 +44,20 @@ export default function AdminSendInvites({ pendingInvites, sentInvites }: Props)
   const [sendResult, setSendResult] = useState<SendResult | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
   const [reminderState, setReminderState] = useState<Record<string, 'sending' | 'sent' | 'error'>>({})
+  const [testEmail, setTestEmail] = useState('')
+  const [testState, setTestState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+
+  async function sendTestEmail(e: React.FormEvent) {
+    e.preventDefault()
+    setTestState('sending')
+    const res = await fetch('/api/admin/send-reminder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: testEmail.trim().toLowerCase(), name: null }),
+    })
+    setTestState(res.ok ? 'sent' : 'error')
+    if (res.ok) setTimeout(() => setTestState('idle'), 4000)
+  }
 
   async function sendAll() {
     setSendingAll(true)
@@ -135,6 +149,31 @@ export default function AdminSendInvites({ pendingInvites, sentInvites }: Props)
               : `Skicka inbjudningar (${localPending.length} st)`}
         </button>
       </div>
+
+      {/* Testmejl */}
+      <form onSubmit={sendTestEmail} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+        <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">Skicka testmejl</p>
+        <div className="flex gap-2">
+          <input
+            type="email"
+            value={testEmail}
+            onChange={e => { setTestEmail(e.target.value); setTestState('idle') }}
+            placeholder="test@exempel.se"
+            required
+            className="flex-1 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+          />
+          <button
+            type="submit"
+            disabled={testState === 'sending' || !testEmail}
+            className="bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-200 font-medium px-4 py-2 rounded-lg text-sm transition-colors shrink-0"
+          >
+            {testState === 'sending' ? 'Skickar…' : testState === 'sent' ? 'Skickat ✓' : 'Skicka'}
+          </button>
+        </div>
+        {testState === 'error' && (
+          <p className="text-xs text-red-400 mt-2">Misslyckades – kontrollera Railway-loggarna.</p>
+        )}
+      </form>
 
       {/* Väntar på inbjudan */}
       {localPending.length > 0 && (
