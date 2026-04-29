@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
 import StatusButton from './StatusButton'
 import type { Task, CoAssignee } from '@/lib/types'
 
@@ -19,9 +20,39 @@ export default function TaskCard({ task, coAssignees }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const isDirty = notes !== savedNotes
+  const isDirtyRef = useRef(isDirty)
+  useEffect(() => { isDirtyRef.current = isDirty }, [isDirty])
+
+  // Realtime: hämta senaste anteckningar när admin eller annan volontär sparar
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`task-notes:${task.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'tasks',
+          filter: `id=eq.${task.id}`,
+        },
+        (payload) => {
+          const updated = payload.new as Task
+          // Skriv inte över osparade ändringar
+          if (!isDirtyRef.current) {
+            setNotes(updated.notes ?? '')
+            setSavedNotes(updated.notes ?? '')
+          }
+        }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [task.id])
+
+  const isDirty2 = notes !== savedNotes
 
   async function saveNotes() {
-    if (!isDirty || saving) return
+    if (!isDirty2 || saving) return
     setSaving(true)
     const res = await fetch(`/api/tasks/${task.id}/notes`, {
       method: 'PATCH',
@@ -70,7 +101,7 @@ export default function TaskCard({ task, coAssignees }: Props) {
             </button>
           </div>
 
-          {/* Status + medansvariga – högerjusterat */}
+          {/* Status + medansvariga */}
           <div className="shrink-0 flex flex-col items-end gap-1.5" onClick={e => e.stopPropagation()}>
             <StatusButton taskId={task.id} currentStatus={task.status} />
             {coAssignees.length > 0 && (
@@ -141,7 +172,7 @@ export default function TaskCard({ task, coAssignees }: Props) {
               <p className="text-xs text-zinc-600">Delas med alla tilldelade</p>
               <button
                 onClick={saveNotes}
-                disabled={!isDirty || saving}
+                disabled={!isDirty2 || saving}
                 className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-amber-600 hover:bg-amber-500 text-white"
               >
                 {saving ? 'Sparar...' : justSaved ? 'Sparat ✓' : 'Spara anteckningar'}
