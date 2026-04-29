@@ -16,6 +16,14 @@ export default function LoginPage() {
   const [resendCooldown, setResendCooldown] = useState(0)
   const codeInputRef = useRef<HTMLInputElement>(null)
 
+  // Redirecta till /dashboard om användaren redan är inloggad
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) router.replace('/dashboard')
+    })
+  }, [router])
+
   // Återställ e-post från sessionStorage vid sidladdning
   useEffect(() => {
     const saved = sessionStorage.getItem('otp_email')
