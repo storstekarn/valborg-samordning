@@ -5,7 +5,7 @@
 | Lager | Teknik |
 |---|---|
 | Framework | Next.js (App Router, server + client components) |
-| Auth (volontärer) | Supabase Auth – magic link via Resend SMTP |
+| Auth (volontärer) | Supabase Auth – OTP-kod (8 siffror) via Resend SMTP |
 | Auth (admin) | JWT-cookie via `jose` – ingen Supabase-session |
 | Databas | Supabase (PostgreSQL) med Row Level Security |
 | Realtime | Supabase Realtime (`postgres_changes`) |
@@ -44,26 +44,26 @@ Alla admin-databas-operationer måste ske via `createAdminClient()` i API-routes
 
 ---
 
-## Auth-flöde för volontärer (magic link)
+## Auth-flöde för volontärer (OTP-kod)
 
 1. Volontär anger e-post på `/auth/login`
-2. `POST /api/auth/send-magic-link` verifierar att e-posten finns i `pending_assignments`,
-   anropar `supabase.auth.signInWithOtp({ ..., options: { shouldCreateUser: false } })`
-3. Supabase skickar magic link via Resend SMTP
-4. Volontären klickar länken → Supabase redirectar till `/auth/callback#access_token=...`
-5. `/auth/callback/page.tsx` (client component) parsar fragmentet manuellt:
-   ```ts
-   const params = new URLSearchParams(window.location.hash.substring(1))
-   await supabase.auth.setSession({ access_token, refresh_token })
-   ```
-6. Vid lyckat `setSession` → `router.push('/dashboard')`
+2. `POST /api/auth/send-otp` verifierar att e-posten finns i `pending_assignments`,
+   anropar `supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })`
+   – **utan `emailRedirectTo`**, vilket gör att Supabase skickar en 8-siffrig kod istället för magic link
+3. Supabase skickar OTP-koden via Resend SMTP
+4. Volontären skriver in koden i ett enda inputfält (`maxLength={8}`) på inloggningssidan
+5. Klienten anropar `supabase.auth.verifyOtp({ email, token, type: 'email' })`
+6. Vid lyckat svar → `router.push('/dashboard')`
 
-**Varför client-side:** URL-fragment (`#...`) skickas aldrig till servern. En `route.ts`
-på samma path som `page.tsx` blockerar rendering – de kan inte samexistera i App Router.
+**Viktigt – 8 siffror, inte 6:** När "Confirm email" är avstängt i Supabase-projektet
+skickas en 8-siffrig kod. Använd ett enda inputfält med `maxLength={8}`, inte separata rutor.
+Koden filtreras till enbart siffror (`replace(/\D/g, '')`).
 
-**`shouldCreateUser: false`:** Förhindrar att Supabase skapar nya auth-användare vid
-inloggningsförsök. Användare skapas första gången de klickar en inbjudningslänk, inte vid
-varje inloggning.
+**`shouldCreateUser: true`:** Supabase skapar auth-användaren om den inte finns sedan tidigare.
+Databasens trigger `handle_new_user` skapar sedan profil + task_assignments automatiskt.
+
+**`/auth/callback/page.tsx`** behålls som fallback (hanterar hash-fragment och PKCE-code
+för edge cases), men används normalt inte i OTP-flödet.
 
 ---
 

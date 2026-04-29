@@ -1,19 +1,25 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+
+type Step = 'email' | 'otp'
 
 export default function LoginPage() {
+  const router = useRouter()
   const [email, setEmail] = useState('')
-  const [submitted, setSubmitted] = useState(false)
+  const [code, setCode] = useState('')
+  const [step, setStep] = useState<Step>('email')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSendOtp(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
-    const res = await fetch('/api/auth/send-magic-link', {
+    const res = await fetch('/api/auth/send-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email.trim().toLowerCase() }),
@@ -25,7 +31,28 @@ export default function LoginPage() {
       const data = await res.json()
       setError(data.error || 'Något gick fel. Försök igen.')
     } else {
-      setSubmitted(true)
+      setStep('otp')
+    }
+  }
+
+  async function handleVerifyOtp(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+
+    const supabase = createClient()
+    const { error: verifyError } = await supabase.auth.verifyOtp({
+      email: email.trim().toLowerCase(),
+      token: code.trim(),
+      type: 'email',
+    })
+
+    setLoading(false)
+
+    if (verifyError) {
+      setError('Ogiltig eller utgången kod. Kontrollera koden och försök igen.')
+    } else {
+      router.push('/dashboard')
     }
   }
 
@@ -37,18 +64,8 @@ export default function LoginPage() {
           <p className="text-zinc-400 text-sm mt-2">Logga in med din e-postadress</p>
         </div>
 
-        {submitted ? (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
-            <div className="text-3xl mb-3">📬</div>
-            <h2 className="font-semibold text-zinc-100 mb-2">Kolla din inkorg!</h2>
-            <p className="text-sm text-zinc-400">
-              Vi har skickat en inloggningslänk till{' '}
-              <span className="text-zinc-200 font-medium">{email}</span>.
-              Klicka på länken i mejlet för att logga in.
-            </p>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
+        {step === 'email' ? (
+          <form onSubmit={handleSendOtp} className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-zinc-300 mb-1.5">
                 E-postadress
@@ -76,7 +93,53 @@ export default function LoginPage() {
               disabled={loading || !email}
               className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-700 disabled:text-zinc-500 text-zinc-900 font-semibold py-2.5 rounded-lg text-sm transition-colors"
             >
-              {loading ? 'Skickar...' : 'Skicka inloggningslänk'}
+              {loading ? 'Skickar...' : 'Skicka kod'}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleVerifyOtp} className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
+            <div>
+              <p className="text-sm text-zinc-400 mb-4">
+                En inloggningskod har skickats till{' '}
+                <span className="text-zinc-200 font-medium">{email}</span>.
+              </p>
+              <label htmlFor="code" className="block text-sm font-medium text-zinc-300 mb-1.5">
+                Ange din inloggningskod
+              </label>
+              <input
+                id="code"
+                type="text"
+                inputMode="numeric"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                required
+                autoComplete="one-time-code"
+                placeholder="12345678"
+                maxLength={8}
+                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2.5 text-sm placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent tracking-widest text-center font-mono text-lg"
+              />
+            </div>
+
+            {error && (
+              <p className="text-xs text-red-400 bg-red-950/40 border border-red-900 rounded-lg px-3 py-2">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || code.length < 6}
+              className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-700 disabled:text-zinc-500 text-zinc-900 font-semibold py-2.5 rounded-lg text-sm transition-colors"
+            >
+              {loading ? 'Verifierar...' : 'Logga in'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setStep('email'); setCode(''); setError(null) }}
+              className="w-full text-zinc-500 hover:text-zinc-300 text-xs py-1 transition-colors"
+            >
+              Fel e-postadress? Gå tillbaka
             </button>
           </form>
         )}

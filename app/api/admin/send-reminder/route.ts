@@ -15,26 +15,15 @@ export async function POST(request: Request) {
   const { email, name } = await request.json()
   if (!email?.trim()) return NextResponse.json({ error: 'email krävs' }, { status: 400 })
 
-  const normalEmail = (email as string).trim().toLowerCase()
-  const supabase = createAdminClient()
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
-
-  const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-    type: 'magiclink',
-    email: normalEmail,
-    options: { redirectTo: `${siteUrl}/auth/callback` },
-  })
-
-  if (linkError || !linkData.properties?.action_link) {
-    return NextResponse.json({ error: 'Kunde inte generera inloggningslänk' }, { status: 500 })
-  }
+  const loginUrl = `${siteUrl}/auth/login`
 
   const resend = new Resend(process.env.RESEND_API_KEY)
   const { error: sendError } = await resend.emails.send({
     from: process.env.EMAIL_FROM || 'noreply@synergyminds.se',
-    to: normalEmail,
-    subject: 'Påminnelse: din inloggningslänk till Valborg Infra 2026',
-    html: buildInviteHtml(name ?? null, linkData.properties.action_link),
+    to: (email as string).trim().toLowerCase(),
+    subject: 'Påminnelse: logga in på Valborg Infra 2026',
+    html: buildInviteHtml(name ?? null, loginUrl),
   })
 
   if (sendError) {

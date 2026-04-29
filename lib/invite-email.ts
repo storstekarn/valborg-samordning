@@ -37,7 +37,8 @@ export function buildInviteHtml(name: string | null, loginUrl: string): string {
                 rapportera incidenter och kommunicera med driftledningen via appen.
               </p>
               <p style="margin:0 0 32px;font-size:15px;color:#a1a1aa;line-height:1.65;">
-                Klicka på knappen nedan för att logga in – inga lösenord behövs.
+                Gå till <a href="${loginUrl}" style="color:#f59e0b;text-decoration:none;">${loginUrl}</a>
+                och ange din inloggningskod när du får den via e-post – inga lösenord behövs.
               </p>
 
               <!-- CTA button -->
@@ -46,7 +47,7 @@ export function buildInviteHtml(name: string | null, loginUrl: string): string {
                   <td style="border-radius:10px;background:#d97706;">
                     <a href="${loginUrl}"
                        style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:700;color:#09090b;text-decoration:none;border-radius:10px;letter-spacing:0.01em;">
-                      Logga in på Valborg Infra 2026
+                      Gå till Valborg Infra 2026
                     </a>
                   </td>
                 </tr>
@@ -61,7 +62,7 @@ export function buildInviteHtml(name: string | null, loginUrl: string): string {
 
               <!-- Footer note -->
               <p style="margin:0;font-size:12px;color:#52525b;line-height:1.6;">
-                Länken är giltig i 24 timmar. Om den slutar fungera kan du be om en ny länk i appen.<br />
+                När du klickar på knappen skickas en inloggningskod till din e-post.<br />
                 Vid frågor, kontakta Patrik eller Max.
               </p>
 

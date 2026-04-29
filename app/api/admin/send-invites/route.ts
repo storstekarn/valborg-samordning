@@ -42,6 +42,7 @@ export async function POST() {
 
   const resend = new Resend(process.env.RESEND_API_KEY)
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+  const loginUrl = `${siteUrl}/auth/login`
 
   let sent = 0
   let errors = 0
@@ -49,19 +50,11 @@ export async function POST() {
 
   for (const [email, name] of toInvite) {
     try {
-      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-        type: 'magiclink',
-        email,
-        options: { redirectTo: `${siteUrl}/auth/callback` },
-      })
-
-      if (linkError || !linkData.properties?.action_link) { errors++; continue }
-
       const { error: sendError } = await resend.emails.send({
         from: process.env.EMAIL_FROM || 'noreply@synergyminds.se',
         to: email,
-        subject: 'Du är inbjuden till Valborg Infra 2026 – här är din inloggningslänk',
-        html: buildInviteHtml(name, linkData.properties.action_link),
+        subject: 'Du är inbjuden till Valborg Infra 2026',
+        html: buildInviteHtml(name, loginUrl),
       })
 
       if (sendError) { errors++; continue }
