@@ -27,48 +27,44 @@ export async function POST(request: Request) {
 
   const adminClient = createAdminClient()
 
-  // Kontrollera att e-posten finns i pending_assignments
-  const { data: pendingRows, error: pendingError } = await adminClient
-    .from('pending_assignments')
-    .select('name, phone, role, task_title')
-    .ilike('email', normalizedEmail)
+  // Kolla pending_assignments och profiles parallellt
+  const [{ data: pendingRows, error: pendingError }, { data: existingProfile, error: profileLookupError }] =
+    await Promise.all([
+      adminClient
+        .from('pending_assignments')
+        .select('name, phone, role, task_title')
+        .ilike('email', normalizedEmail),
+      adminClient
+        .from('profiles')
+        .select('id, email')
+        .ilike('email', normalizedEmail)
+        .maybeSingle(),
+    ])
 
-  console.log('[volunteer-login] pending_assignments query:', {
-    email: normalizedEmail,
+  console.log('[volunteer-login] pending_assignments:', {
     rows: pendingRows?.length ?? 0,
-    data: pendingRows,
     error: pendingError ? { message: pendingError.message, code: pendingError.code } : null,
   })
+  console.log('[volunteer-login] profiles:', {
+    found: !!existingProfile,
+    profileId: existingProfile?.id ?? null,
+    error: profileLookupError ? profileLookupError.message : null,
+  })
 
-  if (pendingError) {
-    console.error('[volunteer-login] Supabase-fel vid pending_assignments-sökning:', pendingError)
-    return NextResponse.json({ error: 'Serverfel vid e-postkontroll.' }, { status: 500 })
-  }
+  const foundInPending  = !pendingError  && pendingRows  && pendingRows.length > 0
+  const foundInProfiles = !profileLookupError && !!existingProfile
 
-  if (!pendingRows || pendingRows.length === 0) {
-    console.warn('[volunteer-login] E-post ej funnen i pending_assignments:', normalizedEmail)
+  if (!foundInPending && !foundInProfiles) {
+    console.warn('[volunteer-login] E-post ej funnen i varken pending_assignments eller profiles:', normalizedEmail)
     return NextResponse.json({ error: 'Din e-postadress är inte registrerad.' }, { status: 403 })
   }
 
-  // Hämta befintlig profil
-  const { data: profile, error: profileError } = await adminClient
-    .from('profiles')
-    .select('id, email')
-    .ilike('email', normalizedEmail)
-    .maybeSingle()
-
-  console.log('[volunteer-login] Profil-lookup:', {
-    found: !!profile,
-    profileId: profile?.id ?? null,
-    error: profileError ? profileError.message : null,
-  })
-
-  let resolvedProfile = profile
+  let resolvedProfile = existingProfile
 
   if (!resolvedProfile) {
-    const name  = pendingRows.find(r => r.name)?.name   ?? null
-    const phone = pendingRows.find(r => r.phone)?.phone  ?? null
-    const role  = pendingRows.find(r => r.role)?.role    ?? 'volunteer'
+    const name  = pendingRows?.find(r => r.name)?.name   ?? null
+    const phone = pendingRows?.find(r => r.phone)?.phone  ?? null
+    const role  = pendingRows?.find(r => r.role)?.role    ?? 'volunteer'
     const newId = crypto.randomUUID()
 
     const { data: created, error: createErr } = await adminClient
@@ -89,8 +85,8 @@ export async function POST(request: Request) {
 
     resolvedProfile = created
 
-    // Skapa task_assignments (replikerar Supabase-triggern)
-    const taskTitles = pendingRows.map(r => r.task_title).filter(Boolean) as string[]
+    // Skapa task_assignments om vi har pending-rader
+    const taskTitles = (pendingRows ?? []).map(r => r.task_title).filter(Boolean) as string[]
     for (const title of taskTitles) {
       const { data: task } = await adminClient
         .from('tasks')
