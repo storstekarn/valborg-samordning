@@ -55,8 +55,7 @@ export default async function AdminPage() {
   ])
 
   const tasks = sortTasks((tasksRes.data as Task[]) ?? [])
-  console.log('[admin] tasks.status snapshot:', tasks.map(t => ({ id: t.id, title: t.title, status: t.status })))
-  const activeIncidents = (activeIncidentsRes.data ?? []) as (Incident & {
+const activeIncidents = (activeIncidentsRes.data ?? []) as (Incident & {
     profiles: { name: string; phone: string | null } | null
   })[]
   const archivedCount = archivedCountRes.count ?? 0

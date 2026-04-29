@@ -58,7 +58,6 @@ export default async function DashboardPage() {
     ])
 
     tasks = sortTasks((tasksRes.data as Task[]) ?? [])
-    console.log(`[dashboard] tasks.status (user: ${session.email}):`, tasks.map(t => ({ id: t.id, title: t.title, status: t.status })))
 
     for (const row of (coAssignRes.data ?? []) as {
       task_id: string
