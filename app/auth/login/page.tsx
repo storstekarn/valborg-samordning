@@ -195,12 +195,8 @@ export default function LoginPage() {
               </p>
 
               {/* Clipboard-instruktion */}
-              <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2.5 leading-relaxed space-y-1.5">
-                <p>📋 Öppna mejlet, kopiera koden och kom tillbaka hit – den klistras in automatiskt.</p>
-                <p className="text-amber-400/70">
-                  På Android: om mejlet öppnas i Gmail-appen, tryck länge på länken och välj
-                  "Öppna i Chrome" eller "Öppna i webbläsaren" – annars kan inte koden klistras in automatiskt.
-                </p>
+              <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2.5">
+                <p>📋 Öppna mejlet, kopiera koden och klistra in den här.</p>
               </div>
 
               <div>
