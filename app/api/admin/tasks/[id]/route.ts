@@ -16,6 +16,7 @@ export async function PATCH(
   const body = await request.json()
   const update: Record<string, unknown> = {}
 
+  const VALID_STATUSES = ['ej_startad', 'pågår', 'klar']
   if (body.title !== undefined) update.title = String(body.title).trim()
   if (body.area !== undefined) update.area = String(body.area).trim()
   if (body.description !== undefined) update.description = body.description?.trim() || null
@@ -27,6 +28,12 @@ export async function PATCH(
   }
   if (body.start_time !== undefined) update.start_time = body.start_time?.trim() || null
   if (body.end_time !== undefined) update.end_time = body.end_time?.trim() || null
+  if (body.status !== undefined) {
+    if (!VALID_STATUSES.includes(body.status)) {
+      return NextResponse.json({ error: 'Ogiltig status' }, { status: 400 })
+    }
+    update.status = body.status
+  }
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: 'Inget att uppdatera' }, { status: 400 })

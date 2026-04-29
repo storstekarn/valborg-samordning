@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
 import AdminIncidentRow from './AdminIncidentRow'
-import AdminTaskRow from './AdminTaskRow'
+import AdminTaskList from './AdminTaskList'
 import VolunteerStatusCard from './VolunteerStatusCard'
 import { sortTasks } from '@/lib/sortTasks'
 import type { Task, Incident, TaskStatus } from '@/lib/types'
@@ -193,13 +193,7 @@ export default async function AdminPage() {
           <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
             Alla uppgifter
           </h2>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-            <div className="divide-y divide-zinc-800">
-              {tasks.map((task) => (
-                <AdminTaskRow key={task.id} task={task} />
-              ))}
-            </div>
-          </div>
+          <AdminTaskList initialTasks={tasks} />
         </section>
 
         {/* Snabblänkar */}
