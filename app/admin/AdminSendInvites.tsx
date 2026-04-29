@@ -19,6 +19,12 @@ interface Props {
   sentInvites: SentInvite[]
 }
 
+interface SendResult {
+  sent: number
+  errors: number
+  failedEmails: string[]
+}
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
@@ -35,9 +41,8 @@ export default function AdminSendInvites({ pendingInvites, sentInvites }: Props)
   const [localPending, setLocalPending] = useState<PendingInvite[]>(pendingInvites)
   const [localSent, setLocalSent] = useState<SentInvite[]>(sentInvites)
   const [sendingAll, setSendingAll] = useState(false)
-  const [sendResult, setSendResult] = useState<{ sent: number; errors: number } | null>(null)
+  const [sendResult, setSendResult] = useState<SendResult | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
-  // Per-person reminder state: email → 'sending' | 'sent' | 'error'
   const [reminderState, setReminderState] = useState<Record<string, 'sending' | 'sent' | 'error'>>({})
 
   async function sendAll() {
@@ -50,8 +55,8 @@ export default function AdminSendInvites({ pendingInvites, sentInvites }: Props)
       setSendError('Något gick fel vid utskick.')
       return
     }
-    const data: { sent: number; errors: number; sentEmails: string[]; sentAt: string | null } = await res.json()
-    setSendResult({ sent: data.sent, errors: data.errors })
+    const data: { sent: number; errors: number; sentEmails: string[]; failedEmails: string[]; sentAt: string | null } = await res.json()
+    setSendResult({ sent: data.sent, errors: data.errors, failedEmails: data.failedEmails ?? [] })
     if (data.sentEmails.length > 0 && data.sentAt) {
       const sentSet = new Set(data.sentEmails.map(e => e.toLowerCase()))
       const now = data.sentAt
@@ -94,15 +99,26 @@ export default function AdminSendInvites({ pendingInvites, sentInvites }: Props)
         </div>
 
         <p className="text-sm text-zinc-400">
-          Skickar inbjudningsmejl via Resend till alla som inte fått inbjudan än.
+          Skickar inbjudningsmejl via Resend med 500&nbsp;ms mellanrum.
           Mejlet innehåller länken till inloggningssidan – därifrån begär man en engångskod.
         </p>
 
         {sendResult && (
-          <p className="text-sm text-green-400 bg-green-950/40 border border-green-900 rounded-lg px-3 py-2">
-            Skickade {sendResult.sent} mejl.{sendResult.errors > 0 ? ` ${sendResult.errors} misslyckades.` : ''}
-          </p>
+          <div className="space-y-2">
+            <p className={`text-sm rounded-lg px-3 py-2 ${sendResult.errors > 0 ? 'text-amber-400 bg-amber-950/40 border border-amber-900' : 'text-green-400 bg-green-950/40 border border-green-900'}`}>
+              {sendResult.sent} mejl skickade.{sendResult.errors > 0 ? ` ${sendResult.errors} misslyckades – se listan nedan.` : ' Alla lyckades.'}
+            </p>
+            {sendResult.failedEmails.length > 0 && (
+              <div className="text-xs text-red-400 bg-red-950/40 border border-red-900 rounded-lg px-3 py-2 space-y-1">
+                <p className="font-semibold">Misslyckade utskick – skicka om manuellt:</p>
+                {sendResult.failedEmails.map(e => (
+                  <p key={e} className="font-mono">{e}</p>
+                ))}
+              </div>
+            )}
+          </div>
         )}
+
         {sendError && (
           <p className="text-sm text-red-400 bg-red-950/40 border border-red-900 rounded-lg px-3 py-2">{sendError}</p>
         )}
@@ -113,7 +129,7 @@ export default function AdminSendInvites({ pendingInvites, sentInvites }: Props)
           className="w-full bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors"
         >
           {sendingAll
-            ? 'Skickar...'
+            ? `Skickar… (${localPending.length} st, ~${Math.ceil(localPending.length * 0.5)}s)`
             : localPending.length === 0
               ? 'Inga väntande inbjudningar'
               : `Skicka inbjudningar (${localPending.length} st)`}

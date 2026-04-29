@@ -4,6 +4,8 @@ import { buildInviteHtml } from '@/lib/invite-email'
 import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
 export async function POST() {
   const session = await getAdminSession()
   if (!session) return NextResponse.json({ error: 'Ej behörig' }, { status: 401 })
@@ -14,12 +16,10 @@ export async function POST() {
 
   const supabase = createAdminClient()
 
-  // Källa: alla unika e-poster i pending_assignments
   const { data: pendingRows } = await supabase
     .from('pending_assignments')
     .select('email, name')
 
-  // Vilka har redan fått en inbjudan?
   const { data: sentRows } = await supabase
     .from('invite_queue')
     .select('email')
@@ -27,7 +27,6 @@ export async function POST() {
 
   const sentEmailSet = new Set((sentRows ?? []).map(r => (r.email as string).toLowerCase()))
 
-  // Bygg distinct-map av de som ska bjudas in
   const toInvite = new Map<string, string | null>()
   for (const row of pendingRows ?? []) {
     const email = (row.email as string).toLowerCase()
@@ -37,18 +36,21 @@ export async function POST() {
   }
 
   if (toInvite.size === 0) {
-    return NextResponse.json({ sent: 0, errors: 0, sentEmails: [], sentAt: null })
+    return NextResponse.json({ sent: 0, errors: 0, sentEmails: [], failedEmails: [], sentAt: null })
   }
+
+  console.log(`[send-invites] Startar utskick till ${toInvite.size} mottagare`)
 
   const resend = new Resend(process.env.RESEND_API_KEY)
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
   const loginUrl = `${siteUrl}/auth/login`
 
-  let sent = 0
-  let errors = 0
   const sentEmailsList: string[] = []
+  const failedEmailsList: string[] = []
 
-  for (const [email, name] of toInvite) {
+  const entries = [...toInvite.entries()]
+  for (let i = 0; i < entries.length; i++) {
+    const [email, name] = entries[i]
     try {
       const { error: sendError } = await resend.emails.send({
         from: process.env.EMAIL_FROM || 'noreply@synergyminds.se',
@@ -57,16 +59,24 @@ export async function POST() {
         html: buildInviteHtml(name, loginUrl),
       })
 
-      if (sendError) { errors++; continue }
-
-      sentEmailsList.push(email)
-      sent++
-    } catch {
-      errors++
+      if (sendError) {
+        console.error(`[send-invites] Misslyckades (${i + 1}/${entries.length}): ${email} – ${sendError.message}`)
+        failedEmailsList.push(email)
+      } else {
+        console.log(`[send-invites] Skickat (${i + 1}/${entries.length}): ${email}`)
+        sentEmailsList.push(email)
+      }
+    } catch (err) {
+      console.error(`[send-invites] Undantag (${i + 1}/${entries.length}): ${email}`, err)
+      failedEmailsList.push(email)
     }
+
+    // 500ms fördröjning mellan varje mejl – undviker Resend rate-limit
+    if (i < entries.length - 1) await delay(500)
   }
 
-  // Registrera skickade i invite_queue (upsert – skapar eller uppdaterar raden)
+  console.log(`[send-invites] Klart – ${sentEmailsList.length} lyckade, ${failedEmailsList.length} misslyckade`)
+
   const now = new Date().toISOString()
   if (sentEmailsList.length > 0) {
     await supabase
@@ -81,5 +91,11 @@ export async function POST() {
       )
   }
 
-  return NextResponse.json({ sent, errors, sentEmails: sentEmailsList, sentAt: now })
+  return NextResponse.json({
+    sent: sentEmailsList.length,
+    errors: failedEmailsList.length,
+    sentEmails: sentEmailsList,
+    failedEmails: failedEmailsList,
+    sentAt: now,
+  })
 }
