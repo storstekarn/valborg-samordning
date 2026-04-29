@@ -20,15 +20,15 @@ export async function POST(request: Request) {
   }
 
   const supabase = createAdminClient()
-  const { error } = await supabase.from('messages').insert({
-    from_id: fromId,
-    to_id,
-    message: message.trim(),
-  })
+  const { data: inserted, error } = await supabase
+    .from('messages')
+    .insert({ from_id: fromId, to_id, message: message.trim() })
+    .select()
+    .single()
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true, message: inserted })
 }

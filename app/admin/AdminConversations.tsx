@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { playMessageSound, showNotification } from '@/lib/notifications'
 import type { Profile, Message } from '@/lib/types'
 
 interface Props {
@@ -27,6 +29,45 @@ export default function AdminConversations({ superadminId, profiles, initialMess
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const newMsgRef = useRef<HTMLSelectElement>(null)
+  const selectedIdRef = useRef<string | null>(selectedId)
+  const profilesRef = useRef(profiles)
+
+  useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
+  useEffect(() => { profilesRef.current = profiles }, [profiles])
+
+  // Realtime: lyssna på broadcast-kanalen för inkommande meddelanden till admin
+  useEffect(() => {
+    if (!superadminId) return
+    const supabase = createClient()
+    const channel = supabase
+      .channel('valborg-messages')
+      .on('broadcast', { event: 'new_message' }, ({ payload }) => {
+        const m = payload as Message
+        if (m.to_id !== superadminId) return
+
+        setMessages(prev => {
+          if (prev.some(x => x.id === m.id)) return prev
+          return [...prev, m]
+        })
+
+        // Markera som läst om konversationen är öppen
+        if (m.from_id === selectedIdRef.current) {
+          fetch('/api/admin/messages/read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ partnerId: m.from_id }),
+          })
+          setMessages(prev => prev.map(x => x.id === m.id ? { ...x, read: true } : x))
+        }
+
+        playMessageSound()
+        const senderName = profilesRef.current.find(p => p.id === m.from_id)?.name ?? 'Okänd'
+        showNotification(`💬 Nytt meddelande från ${senderName}`, m.message.slice(0, 100))
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [superadminId])
 
   // Per-partner stats
   const lastByPartner: Record<string, Message> = {}
@@ -45,7 +86,6 @@ export default function AdminConversations({ superadminId, profiles, initialMess
   const hasMessages = new Set(Object.keys(lastByPartner))
   const others = profiles.filter(p => p.id !== superadminId)
 
-  // Sort: conversations first (by recency), then rest alphabetically
   const sorted = [
     ...others.filter(p => hasMessages.has(p.id))
       .sort((a, b) =>
@@ -90,24 +130,48 @@ export default function AdminConversations({ superadminId, profiles, initialMess
     e.preventDefault()
     if (!selectedId || !reply.trim() || sending) return
     setSending(true)
+
+    const text = reply.trim()
+    setReply('')
+
+    // Optimistisk uppdatering
+    const optimisticMsg: Message = {
+      id: `optimistic-${Date.now()}`,
+      from_id: superadminId,
+      to_id: selectedId,
+      message: text,
+      read: false,
+      created_at: new Date().toISOString(),
+    }
+    setMessages(prev => [...prev, optimisticMsg])
+
     const res = await fetch('/api/admin/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to_id: selectedId, message: reply.trim() }),
+      body: JSON.stringify({ to_id: selectedId, message: text }),
     })
-    if (res.ok) {
-      const optimistic: Message = {
-        id: crypto.randomUUID(),
-        from_id: superadminId,
-        to_id: selectedId,
-        message: reply.trim(),
-        read: false,
-        created_at: new Date().toISOString(),
-      }
-      setMessages(prev => [...prev, optimistic])
-      setReply('')
-    }
+
     setSending(false)
+
+    if (res.ok) {
+      const { message: realMsg } = await res.json()
+      if (realMsg) {
+        // Ersätt optimistiskt meddelande med verklig DB-rad
+        setMessages(prev => prev.map(m => m.id === optimisticMsg.id ? realMsg : m))
+
+        // Broadcastar till mottagaren så de ser meddelandet direkt
+        const supabase = createClient()
+        const bc = supabase.channel('valborg-messages')
+        bc.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            bc.send({ type: 'broadcast', event: 'new_message', payload: realMsg })
+              .finally(() => supabase.removeChannel(bc))
+          }
+        })
+      }
+    } else {
+      setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
+    }
   }
 
   useEffect(() => {
@@ -149,7 +213,6 @@ export default function AdminConversations({ superadminId, profiles, initialMess
           </div>
         </div>
 
-        {/* New message profile picker */}
         {showNewMsg && (
           <div className="px-3 py-2.5 border-b border-zinc-700 bg-zinc-800/50">
             <p className="text-[10px] text-zinc-500 mb-1.5 font-medium uppercase tracking-wide">Välj mottagare</p>
@@ -217,7 +280,6 @@ export default function AdminConversations({ superadminId, profiles, initialMess
       <div className="flex-1 flex flex-col overflow-hidden">
         {selectedId ? (
           <>
-            {/* Conversation header */}
             <div className="px-4 py-2.5 border-b border-zinc-800 flex items-center gap-2.5 shrink-0">
               <div className="w-7 h-7 rounded-full bg-zinc-700 text-zinc-300 flex items-center justify-center text-xs font-bold">
                 {(selectedProfile?.name ?? selectedProfile?.email ?? '?').charAt(0).toUpperCase()}
@@ -234,12 +296,9 @@ export default function AdminConversations({ superadminId, profiles, initialMess
               </div>
             </div>
 
-            {/* Messages */}
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2.5">
               {conversation.length === 0 ? (
-                <p className="text-xs text-zinc-600 text-center mt-6">
-                  Inga meddelanden ännu. Skriv det första!
-                </p>
+                <p className="text-xs text-zinc-600 text-center mt-6">Inga meddelanden ännu.</p>
               ) : (
                 conversation.map(m => {
                   const isMine = m.from_id === superadminId
@@ -262,7 +321,6 @@ export default function AdminConversations({ superadminId, profiles, initialMess
               <div ref={bottomRef} />
             </div>
 
-            {/* Reply input */}
             <form onSubmit={send} className="flex gap-2 px-3 py-2.5 border-t border-zinc-800 shrink-0">
               <input
                 ref={inputRef}
@@ -275,9 +333,10 @@ export default function AdminConversations({ superadminId, profiles, initialMess
               <button
                 type="submit"
                 disabled={!reply.trim() || sending}
-                className="shrink-0 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white font-medium px-3 py-2 rounded-lg text-sm transition-colors"
+                style={{ minHeight: '44px' }}
+                className="shrink-0 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white font-semibold px-4 rounded-lg text-sm transition-colors"
               >
-                {sending ? '...' : 'Skicka'}
+                {sending ? '…' : 'Skicka'}
               </button>
             </form>
           </>
