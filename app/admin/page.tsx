@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
 import AdminIncidentRow from './AdminIncidentRow'
 import AdminTaskList from './AdminTaskList'
+import AdminUnreadCard from './AdminUnreadCard'
 import VolunteerStatusCard from './VolunteerStatusCard'
 import { sortTasks } from '@/lib/sortTasks'
 import type { Task, Incident, TaskStatus } from '@/lib/types'
@@ -134,19 +135,10 @@ export default async function AdminPage() {
             )}
           </div>
 
-          <Link
-            href="/admin/meddelanden"
-            className={`rounded-xl p-4 text-center transition-colors block
-              ${unreadMessages > 0
-                ? 'bg-red-950/30 border border-red-800 hover:bg-red-950/50'
-                : 'bg-zinc-900 border border-zinc-800 hover:bg-zinc-800'}`}
-          >
-            <p className={`text-2xl font-bold ${unreadMessages > 0 ? 'text-red-400' : 'text-zinc-300'}`}>
-              {unreadMessages}
-            </p>
-            <p className="text-xs text-zinc-500 mt-1">Olästa meddelanden</p>
-            <p className="text-xs text-amber-400 mt-0.5">→ Öppna</p>
-          </Link>
+          <AdminUnreadCard
+            initialCount={unreadMessages}
+            superadminId={superadminId}
+          />
 
           <VolunteerStatusCard
             loggedIn={loggedInVols}
