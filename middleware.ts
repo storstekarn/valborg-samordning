@@ -2,10 +2,17 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { jwtVerify } from 'jose'
 
-export async function proxy(request: NextRequest) {
+// Dessa routes redirectas aldrig, oavsett session
+const PUBLIC_ROUTES = ['/', '/auth/login', '/auth/callback']
+
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Skydda alla /admin-routes utom /admin/login
+  if (PUBLIC_ROUTES.includes(pathname)) {
+    return NextResponse.next()
+  }
+
+  // Skydda /admin/** utom /admin/login
   if (pathname.startsWith('/admin') && pathname !== '/admin/login') {
     const token = request.cookies.get('admin_token')?.value
     if (!token) {
@@ -23,5 +30,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*'],
+  matcher: ['/((?!_next/static|_next/image|favicon\\.ico|api/).*)'],
 }
