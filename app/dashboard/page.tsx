@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getVolunteerSession, VOLUNTEER_COOKIE_NAME } from '@/lib/volunteerAuth'
 import ProfileEditor from './ProfileEditor'
 import IncidentBanner from './IncidentBanner'
 import InstallBanner from './InstallBanner'
@@ -18,15 +18,14 @@ const EVENT_DATE_LABELS: Record<string, string> = {
 }
 
 export default async function DashboardPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const session = await getVolunteerSession()
+  if (!session) redirect('/auth/login')
 
-  if (!user) redirect('/auth/login')
+  const supabase = createAdminClient()
 
-  // Hämta profil, uppgiftstilldelningar och aktiva incidenter parallellt
   const [profileRes, assignmentsRes, incidentsRes] = await Promise.all([
-    supabase.from('profiles').select('*').eq('id', user.id).single(),
-    supabase.from('task_assignments').select('task_id').eq('profile_id', user.id),
+    supabase.from('profiles').select('*').eq('id', session.profileId).single(),
+    supabase.from('task_assignments').select('task_id').eq('profile_id', session.profileId),
     supabase
       .from('incidents')
       .select('id, category, message, status, admin_comment, created_at, reported_by')
@@ -42,19 +41,17 @@ export default async function DashboardPage() {
   let coAssigneeMap: Record<string, CoAssignee[]> = {}
 
   if (taskIds.length > 0) {
-    // Hämta uppgifter och inloggade medansvariga parallellt
     const [tasksRes, coAssignRes] = await Promise.all([
       supabase.from('tasks').select('*').in('id', taskIds),
       supabase
         .from('task_assignments')
         .select('task_id, profiles(id, name, email, phone, role)')
         .in('task_id', taskIds)
-        .neq('profile_id', user.id),
+        .neq('profile_id', session.profileId),
     ])
 
     tasks = sortTasks((tasksRes.data as Task[]) ?? [])
 
-    // Bygg { taskId → CoAssignee[] } med inloggade användare
     for (const row of (coAssignRes.data ?? []) as {
       task_id: string
       profiles: Profile | Profile[] | null
@@ -65,14 +62,12 @@ export default async function DashboardPage() {
       coAssigneeMap[row.task_id].push({ id: p.id, name: p.name, email: p.email, phone: p.phone, isPending: false })
     }
 
-    // Hämta pending_assignments för dessa uppgifter (kräver admin-klient, ingen RLS SELECT-policy)
     const taskTitleToId: Record<string, string> = {}
     for (const task of tasks) {
       taskTitleToId[task.title.toLowerCase()] = task.id
     }
 
-    const adminClient = createAdminClient()
-    const { data: pendingRows } = await adminClient
+    const { data: pendingRows } = await supabase
       .from('pending_assignments')
       .select('email, name, task_title')
       .in('task_title', tasks.map(t => t.title))
@@ -81,7 +76,7 @@ export default async function DashboardPage() {
     for (const row of pendingRows ?? []) {
       const taskId = taskTitleToId[row.task_title?.toLowerCase()]
       if (!taskId) continue
-      if (row.email?.toLowerCase() === user.email?.toLowerCase()) continue
+      if (row.email?.toLowerCase() === session.email?.toLowerCase()) continue
       const existing = coAssigneeMap[taskId] ?? []
       if (existing.some(c => c.email.toLowerCase() === row.email.toLowerCase())) continue
       if (!coAssigneeMap[taskId]) coAssigneeMap[taskId] = []
@@ -91,17 +86,19 @@ export default async function DashboardPage() {
 
   async function handleLogout() {
     'use server'
-    const supabase = await createClient()
-    await supabase.auth.signOut()
-    redirect('/')
+    const { cookies } = await import('next/headers')
+    const { redirect: redir } = await import('next/navigation')
+    const cookieStore = await cookies()
+    cookieStore.set(VOLUNTEER_COOKIE_NAME, '', { httpOnly: true, maxAge: 0, path: '/' })
+    redir('/')
   }
 
-  const displayName = profile?.name || user.email
+  const displayName = profile?.name || session.email
 
   return (
     <div className="min-h-screen bg-zinc-950">
       {profile && (
-        <PresenceTracker profileId={user.id} name={profile.name ?? null} page="/dashboard" />
+        <PresenceTracker profileId={session.profileId} name={profile.name ?? null} page="/dashboard" />
       )}
       <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -130,7 +127,6 @@ export default async function DashboardPage() {
         <IncidentBanner initialIncidents={activeIncidents} />
         <InstallBanner />
 
-        {/* Profil-kort */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
           <p className="text-xs text-zinc-500 mb-1">Inloggad som</p>
           <p className="font-semibold text-zinc-100">{displayName}</p>
@@ -148,19 +144,17 @@ export default async function DashboardPage() {
           )}
         </div>
 
-        {/* Min profil */}
         <section>
           <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
             Min profil
           </h2>
           <ProfileEditor
-            profileId={user.id}
+            profileId={session.profileId}
             initialName={profile?.name ?? null}
             initialPhone={profile?.phone ?? null}
           />
         </section>
 
-        {/* Mina uppgifter */}
         <section>
           <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">
             Mina uppgifter

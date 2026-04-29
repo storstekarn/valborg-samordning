@@ -1,5 +1,6 @@
 const LOGIN_URL = 'https://valborg-samordning-production.up.railway.app/auth/login'
 const LOGIN_URL_DISPLAY = 'valborg-samordning-production.up.railway.app/auth/login'
+const VOLUNTEER_CODE = '112233'
 
 export function buildInviteHtml(name: string | null, _loginUrl: string): string {
   const greeting = name ? `Hej ${name}!` : 'Hej!'
@@ -39,15 +40,25 @@ export function buildInviteHtml(name: string | null, _loginUrl: string): string 
                 Du är tilldelad uppgifter på valborgsmässoafton och kan följa körschema,
                 rapportera incidenter och kommunicera med driftledningen via appen.
               </p>
-              <p style="margin:0 0 16px;font-size:15px;color:#a1a1aa;line-height:1.65;">
-                Vi ber om ursäkt – den tidigare inloggningslänken fungerade tyvärr inte
-                för alla. Vi har nu bytt till en enklare metod: du loggar in med en
-                engångskod som skickas till din e-post.
-              </p>
-              <p style="margin:0 0 24px;font-size:15px;color:#a1a1aa;line-height:1.65;">
-                Tryck på knappen nedan, skriv in din e-postadress och klicka på "Skicka kod"
-                – då får du en engångskod via e-post som du skriver in för att logga in.
-              </p>
+
+              <!-- Login instructions -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;background:#111113;border:1px solid #27272a;border-radius:12px;">
+                <tr>
+                  <td style="padding:18px 20px;">
+                    <p style="margin:0 0 12px;font-size:13px;font-weight:600;color:#71717a;text-transform:uppercase;letter-spacing:0.06em;">Så här loggar du in</p>
+                    <p style="margin:0 0 8px;font-size:14px;color:#a1a1aa;line-height:1.6;">
+                      <strong style="color:#d4d4d8;">1.</strong> Gå till appen (knappen nedan)
+                    </p>
+                    <p style="margin:0 0 8px;font-size:14px;color:#a1a1aa;line-height:1.6;">
+                      <strong style="color:#d4d4d8;">2.</strong> Ange din e-postadress
+                    </p>
+                    <p style="margin:0 0 16px;font-size:14px;color:#a1a1aa;line-height:1.6;">
+                      <strong style="color:#d4d4d8;">3.</strong> Ange inloggningskoden:
+                      <span style="display:inline-block;margin-left:6px;background:#1c1c1f;border:1px solid #3f3f46;border-radius:6px;padding:2px 10px;font-family:monospace;font-size:16px;font-weight:700;color:#f59e0b;letter-spacing:0.15em;">${VOLUNTEER_CODE}</span>
+                    </p>
+                  </td>
+                </tr>
+              </table>
 
               <!-- Platform instructions -->
               <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;background:#1c1c1f;border:1px solid #27272a;border-radius:10px;">
@@ -62,7 +73,7 @@ export function buildInviteHtml(name: string | null, _loginUrl: string): string 
               </table>
 
               <!-- CTA button -->
-              <table cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
+              <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
                 <tr>
                   <td style="border-radius:10px;background:#d97706;">
                     <a href="${LOGIN_URL}"
@@ -92,7 +103,7 @@ export function buildInviteHtml(name: string | null, _loginUrl: string): string 
 
               <!-- Footer note -->
               <p style="margin:0;font-size:12px;color:#52525b;line-height:1.6;">
-                Knappen tar dig till inloggningssidan där du begär din engångskod.<br />
+                Koden ovan används av alla volontärer för att logga in.<br />
                 Vid frågor, kontakta Patrik eller Max.
               </p>
 

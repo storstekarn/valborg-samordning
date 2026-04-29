@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { playMessageSound, showNotification } from '@/lib/notifications'
+// createClient används enbart för Realtime-prenumeration (postgres_changes)
 import SoundToggle from '@/components/SoundToggle'
 import type { Profile, Message } from '@/lib/types'
 
@@ -88,12 +89,11 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
   const selectedProfile = allProfiles.find(p => p.id === selectedUserId)
 
   async function markRead(partnerId: string) {
-    const supabase = createClient()
-    await supabase
-      .from('messages')
-      .update({ read: true })
-      .eq('from_id', partnerId)
-      .eq('to_id', currentUserId)
+    await fetch('/api/messages/read', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from_id: partnerId }),
+    })
     setMessages(prev =>
       prev.map(m =>
         m.from_id === partnerId && m.to_id === currentUserId ? { ...m, read: true } : m
@@ -122,10 +122,11 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
   // Mark pre-selected conversation as read on mount
   useEffect(() => {
     if (!defaultPartnerId) return
-    const supabase = createClient()
-    supabase.from('messages').update({ read: true })
-      .eq('from_id', defaultPartnerId)
-      .eq('to_id', currentUserId)
+    fetch('/api/messages/read', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from_id: defaultPartnerId }),
+    })
     setMessages(prev =>
       prev.map(m =>
         m.from_id === defaultPartnerId && m.to_id === currentUserId ? { ...m, read: true } : m
@@ -147,10 +148,11 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
           return [...prev, m]
         })
         if (m.to_id === currentUserId && m.from_id === selectedUserId) {
-          const supabase = createClient()
-          supabase.from('messages').update({ read: true })
-            .eq('id', m.id)
-            .eq('to_id', currentUserId)
+          fetch('/api/messages/read', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ from_id: m.from_id }),
+          })
           setMessages(prev => prev.map(x => x.id === m.id ? { ...x, read: true } : x))
         }
         if (m.to_id === currentUserId) {
@@ -174,11 +176,10 @@ export default function MessagesClient({ currentUserId, allProfiles, sameAreaPro
     e.preventDefault()
     if (!selectedUserId || !newMessage.trim() || sending) return
     setSending(true)
-    const supabase = createClient()
-    await supabase.from('messages').insert({
-      from_id: currentUserId,
-      to_id: selectedUserId,
-      message: newMessage.trim(),
+    await fetch('/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to_id: selectedUserId, message: newMessage.trim() }),
     })
     setSending(false)
     setNewMessage('')
