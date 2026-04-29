@@ -39,9 +39,9 @@ export function buildInviteHtml(name: string | null, _loginUrl: string): string 
                 rapportera incidenter och kommunicera med driftledningen via appen.
               </p>
               <p style="margin:0 0 16px;font-size:15px;color:#a1a1aa;line-height:1.65;">
-                Vi har uppdaterat inloggningsmetoden sedan tidigare. Tidigare skickades en
-                inloggningslänk, men eftersom det uppstod problem för vissa användare loggar
-                man nu in med en engångskod istället.
+                Vi ber om ursäkt – den tidigare inloggningslänken fungerade tyvärr inte
+                för alla. Vi har nu bytt till en enklare metod: du loggar in med en
+                engångskod som skickas till din e-post.
               </p>
               <p style="margin:0 0 32px;font-size:15px;color:#a1a1aa;line-height:1.65;">
                 Gå till <a href="${LOGIN_URL}" style="color:#f59e0b;text-decoration:none;">${LOGIN_URL}</a>,
