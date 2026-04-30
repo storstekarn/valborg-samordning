@@ -5,7 +5,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import AdminConversations from '../AdminConversations'
 import type { Profile, Message } from '@/lib/types'
 
-export default async function AdminMeddelandenPage() {
+export default async function AdminMeddelandenPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ with?: string }>
+}) {
+  const { with: defaultSelectedId } = await searchParams
   const adminClient = createAdminClient()
   const superadminId = process.env.SUPERADMIN_PROFILE_ID ?? ''
 
@@ -68,6 +73,7 @@ export default async function AdminMeddelandenPage() {
             superadminId={superadminId}
             profiles={profiles}
             initialMessages={superadminMessages}
+            defaultSelectedId={defaultSelectedId}
           />
         </section>
 

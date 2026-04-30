@@ -9,6 +9,7 @@ interface Props {
   superadminId: string
   profiles: Profile[]
   initialMessages: Message[]
+  defaultSelectedId?: string
 }
 
 function formatTime(iso: string) {
@@ -20,9 +21,9 @@ function formatTime(iso: string) {
   return d.toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' })
 }
 
-export default function AdminConversations({ superadminId, profiles, initialMessages }: Props) {
+export default function AdminConversations({ superadminId, profiles, initialMessages, defaultSelectedId }: Props) {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(defaultSelectedId ?? null)
   const [reply, setReply] = useState('')
   const [sending, setSending] = useState(false)
   const [showNewMsg, setShowNewMsg] = useState(false)

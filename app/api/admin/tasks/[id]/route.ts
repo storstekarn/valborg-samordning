@@ -3,6 +3,52 @@ import { getAdminSession } from '@/lib/auth'
 import { NextResponse } from 'next/server'
 import type { EventDate } from '@/lib/types'
 
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getAdminSession()
+  if (!session) return NextResponse.json({ error: 'Ej behörig' }, { status: 401 })
+
+  const { id } = await params
+  const supabase = createAdminClient()
+
+  const [taskRes, assignmentsRes] = await Promise.all([
+    supabase.from('tasks').select('title').eq('id', id).single(),
+    supabase.from('task_assignments')
+      .select('profiles(id, name, email, phone)')
+      .eq('task_id', id),
+  ])
+
+  if (!taskRes.data) return NextResponse.json({ error: 'Uppgift hittades inte' }, { status: 404 })
+
+  const { data: pendingRows } = await supabase
+    .from('pending_assignments')
+    .select('email, name, phone')
+    .ilike('task_title', taskRes.data.title)
+
+  type ProfileRow = { id: string; name: string | null; email: string; phone: string | null }
+  const profileEmails = new Set(
+    (assignmentsRes.data ?? [])
+      .map((a) => {
+        const p = Array.isArray(a.profiles) ? a.profiles[0] : a.profiles
+        return (p as ProfileRow | null)?.email?.toLowerCase()
+      })
+      .filter(Boolean)
+  )
+
+  const assigned = (assignmentsRes.data ?? []).map((a) => {
+    const p = (Array.isArray(a.profiles) ? a.profiles[0] : a.profiles) as ProfileRow | null
+    return { type: 'profile' as const, id: p?.id ?? null, name: p?.name ?? null, email: p?.email ?? null, phone: p?.phone ?? null }
+  })
+
+  const pending = (pendingRows ?? [])
+    .filter(p => !profileEmails.has(p.email?.toLowerCase()))
+    .map(p => ({ type: 'pending' as const, id: null, name: p.name ?? null, email: p.email, phone: p.phone ?? null }))
+
+  return NextResponse.json({ assignees: [...assigned, ...pending] })
+}
+
 const VALID_DATES: EventDate[] = ['fore', 'valborg', '1maj']
 
 export async function PATCH(

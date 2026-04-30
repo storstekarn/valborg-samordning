@@ -33,6 +33,14 @@ const EVENT_LABELS: Record<string, string> = {
   fore: 'Förb.', valborg: 'Valborg', '1maj': '1 maj',
 }
 
+interface Assignee {
+  type: 'profile' | 'pending'
+  id: string | null
+  name: string | null
+  email: string | null
+  phone: string | null
+}
+
 interface Props {
   task: Task
 }
@@ -45,9 +53,27 @@ export default function AdminTaskRow({ task }: Props) {
   const [savingNotes, setSavingNotes] = useState(false)
   const [notesSaved, setNotesSaved] = useState(false)
   const [notesError, setNotesError] = useState<string | null>(null)
+  const [assignees, setAssignees] = useState<Assignee[] | null>(null)
+  const [loadingAssignees, setLoadingAssignees] = useState(false)
 
   useEffect(() => { setStatus(task.status) }, [task.status])
   useEffect(() => { setNotes(task.notes ?? '') }, [task.notes])
+
+  async function fetchAssignees() {
+    setLoadingAssignees(true)
+    const res = await fetch(`/api/admin/tasks/${task.id}`)
+    if (res.ok) {
+      const data = await res.json()
+      setAssignees(data.assignees)
+    }
+    setLoadingAssignees(false)
+  }
+
+  function handleToggle() {
+    const next = !expanded
+    setExpanded(next)
+    if (next) fetchAssignees() // färskt anrop vid varje expand
+  }
 
   async function updateStatus(newStatus: TaskStatus) {
     if (newStatus === status || loadingStatus) return
@@ -76,16 +102,16 @@ export default function AdminTaskRow({ task }: Props) {
       setTimeout(() => setNotesSaved(false), 2000)
     } else {
       const data = await res.json().catch(() => ({}))
-      setNotesError(data.error ?? `Fel ${res.status} – kontrollera Railway-loggarna`)
+      setNotesError(data.error ?? `Fel ${res.status}`)
     }
   }
 
   return (
     <div className={`border-l-4 ${STATUS_BORDER[status]}`}>
-      {/* Huvudrad – klickbar för att expandera */}
+      {/* Huvudrad */}
       <div
         className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-zinc-800/40 transition-colors"
-        onClick={() => setExpanded(e => !e)}
+        onClick={handleToggle}
       >
         <div className={`shrink-0 w-2.5 h-2.5 rounded-full ${STATUS_DOT[status]}`} />
 
@@ -97,9 +123,7 @@ export default function AdminTaskRow({ task }: Props) {
             <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${STATUS_BADGE[status]}`}>
               {STATUS_LABELS[status]}
             </span>
-            {task.notes && (
-              <span className="text-xs text-zinc-600">📝</span>
-            )}
+            {task.notes && <span className="text-xs text-zinc-600">📝</span>}
           </div>
           <p className="text-sm text-zinc-200 mt-0.5">{task.title}</p>
         </div>
@@ -119,30 +143,78 @@ export default function AdminTaskRow({ task }: Props) {
         </div>
       </div>
 
-      {/* Expanderad anteckningspanel */}
+      {/* Expanderad panel */}
       {expanded && (
-        <div className="px-4 pb-4 pt-1 border-t border-zinc-800/60 bg-zinc-900/60">
-          <label className="block text-xs font-medium text-zinc-400 mb-1.5">
-            Anteckningar
-            <span className="ml-1 text-zinc-600 font-normal">(delas med volontärerna)</span>
-          </label>
-          <textarea
-            value={notes}
-            onChange={e => { setNotes(e.target.value); setNotesSaved(false) }}
-            rows={3}
-            placeholder="Inga anteckningar ännu..."
-            className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
-          />
-          <div className="flex items-center gap-3 mt-2">
-            <button
-              onClick={saveNotes}
-              disabled={savingNotes}
-              className="text-xs font-medium bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white px-3 py-1.5 rounded-lg transition-colors"
-            >
-              {savingNotes ? 'Sparar...' : 'Spara'}
-            </button>
-            {notesSaved && <span className="text-xs text-green-400">Sparat!</span>}
-            {notesError && <span className="text-xs text-red-400">{notesError}</span>}
+        <div className="px-4 pb-4 pt-1 border-t border-zinc-800/60 bg-zinc-900/60 space-y-4">
+
+          {/* Tilldelade */}
+          <div>
+            <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+              Tilldelade
+            </p>
+            {loadingAssignees ? (
+              <p className="text-xs text-zinc-600">Hämtar...</p>
+            ) : assignees && assignees.length > 0 ? (
+              <ul className="divide-y divide-zinc-800/60">
+                {assignees.map((a, i) => (
+                  <li key={a.id ?? a.email ?? i} className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+                    <div className="min-w-0">
+                      {a.type === 'profile' && a.id ? (
+                        <a
+                          href={`/admin/meddelanden?with=${a.id}`}
+                          className="text-sm text-amber-400 hover:text-amber-300 font-medium truncate block"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          {a.name ?? a.email}
+                        </a>
+                      ) : (
+                        <span className="text-sm text-zinc-300 truncate block">{a.name ?? a.email}</span>
+                      )}
+                      {a.type === 'pending' && (
+                        <span className="text-xs text-zinc-600">Ej inloggad än</span>
+                      )}
+                    </div>
+                    {a.phone && (
+                      <a
+                        href={`tel:${a.phone.replace(/\s/g, '')}`}
+                        className="text-xs text-zinc-400 hover:text-zinc-200 shrink-0"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        📞 {a.phone}
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : assignees !== null ? (
+              <p className="text-xs text-zinc-600">Inga tilldelade.</p>
+            ) : null}
+          </div>
+
+          {/* Anteckningar */}
+          <div>
+            <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
+              Anteckningar
+              <span className="ml-1 text-zinc-600 font-normal normal-case">(delas med volontärerna)</span>
+            </label>
+            <textarea
+              value={notes}
+              onChange={e => { setNotes(e.target.value); setNotesSaved(false) }}
+              rows={3}
+              placeholder="Inga anteckningar ännu..."
+              className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
+            />
+            <div className="flex items-center gap-3 mt-2">
+              <button
+                onClick={saveNotes}
+                disabled={savingNotes}
+                className="text-xs font-medium bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white px-3 py-1.5 rounded-lg transition-colors"
+              >
+                {savingNotes ? 'Sparar...' : 'Spara'}
+              </button>
+              {notesSaved && <span className="text-xs text-green-400">Sparat!</span>}
+              {notesError && <span className="text-xs text-red-400">{notesError}</span>}
+            </div>
           </div>
         </div>
       )}
